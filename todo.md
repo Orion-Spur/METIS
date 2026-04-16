@@ -1,0 +1,36 @@
+# Project TODO
+
+- [x] Replace the existing Orion-Spur/METIS repository with this clean METIS rebuild
+- [x] Upload the provided `metis.webp` artwork to project-compatible static storage and use its CDN URL in the app
+- [x] Define a dark cinematic visual system using Poppins, black backgrounds, and gold/amber accents
+- [x] Build a homepage that contains only the hero image and minimal login form overlay matching the reference mock-up
+- [x] Implement secure authentication with session cookies and protected council routes
+- [x] Build a responsive council chat interface for authenticated users only
+- [x] Show the four council agents exactly as Metis, Athena, Argus, and Loki
+- [x] Give each council agent a distinct visual identity while preserving the shared dark premium aesthetic
+- [x] Implement structured council message rendering with agent name, confidence, recommended action, and summary rationale
+- [x] Implement Metis orchestration flow so Metis coordinates Athena, Argus, and Loki before presenting a final council synthesis
+- [x] Build the server-side multi-agent API layer with provider routing for Anthropic, Azure GPT, Gemini, and xAI
+- [x] Support environment variables exactly named ANTHROPIC_API_KEY, AZUREGPT54_API_KEY, GEMINI_API_KEY, and XAI_API_KEY
+- [x] Add a database schema for council sessions, council messages, agent outputs, and timestamps ready for AWS RDS migration
+- [x] Persist conversation history for council sessions in the database
+- [x] Document environment setup, Vercel deployment, and the migration path to AWS for long-running orchestration
+- [x] Add or update Vitest coverage for authentication, structured council orchestration, and persistence logic
+- [x] Verify the app status after implementation and prepare the repository for Vercel deployment
+- [x] Remove the current non-Next.js foundation because it does not satisfy the required architecture
+- [x] Rebuild METIS on a true Next.js application structure for Vercel deployment
+- [x] Re-implement the homepage, authentication, council interface, API layer, and persistence inside the Next.js architecture
+- [x] Fully remove or isolate remaining legacy Vite and Express implementation artifacts so the repository is unambiguously Next.js-based
+- [x] Recreate METIS homepage, authentication, council UI, API routes, and persistence within the active Next.js app structure
+- [x] Run and verify Next.js build, tests, and project health after the migration and confirm Vercel-ready deployment status
+- [x] Correct the Anthropic model configuration so Metis uses a live supported Anthropic model instead of the current invalid default
+- [x] Correct the xAI model configuration so Loki uses a live supported Grok model instead of the current invalid default
+- [x] Reconfirm the Azure endpoint and deployment configuration for Athena because the current values return a 404 resource-not-found response
+- [x] Re-run the live provider credential validation test after correcting the provider model and Azure configuration issues
+- [x] Align Metis to Anthropic Opus 4.6 using the correct live Anthropic API model identifier
+- [x] Align Athena to Azure GPT 5.4 using the correct deployment configuration for the saved Azure endpoint
+- [x] Align Argus to Gemini 3.1 using the correct live Gemini model identifier
+- [x] Align Loki to Grok 4.2 using the correct live xAI API model identifier
+- [x] Harden the xAI request path against transient TLS/network resets so live council validation is reliable during deployment checks
+- [x] Harden the Azure request path and Azure live validation test against transient TLS/network resets so deployment checks remain reliable
+- [x] Harden the Anthropic request path and Anthropic live validation test against transient TLS/network resets so final deployment checks remain reliable
