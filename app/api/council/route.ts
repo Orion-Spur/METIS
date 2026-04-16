@@ -25,6 +25,7 @@ export async function POST(request: Request) {
 
     const persisted = await persistCouncilTurn({
       sessionId: body.sessionId,
+      userId: session.userId,
       username: session.username,
       userMessage: body.message,
       outputs: turn.outputs,

@@ -2,6 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const originalEnv = { ...process.env };
 
+const findUserByIdentifier = vi.fn();
+const recordSuccessfulLogin = vi.fn();
+
+vi.mock("@/lib/db", () => ({
+  findUserByIdentifier,
+  recordSuccessfulLogin,
+}));
+
 async function loadAuthModule() {
   vi.resetModules();
   return import("@/lib/auth");
@@ -10,9 +18,8 @@ async function loadAuthModule() {
 describe("METIS authentication utilities", () => {
   beforeEach(() => {
     process.env.JWT_SECRET = "1234567890abcdef1234567890abcdef";
-    process.env.METIS_LOGIN_USERNAME = "oracle";
-    delete process.env.METIS_LOGIN_PASSWORD_HASH;
-    delete process.env.METIS_LOGIN_PASSWORD;
+    findUserByIdentifier.mockReset();
+    recordSuccessfulLogin.mockReset();
   });
 
   afterEach(() => {
@@ -20,47 +27,82 @@ describe("METIS authentication utilities", () => {
     vi.restoreAllMocks();
   });
 
-  it("verifies plaintext credentials when METIS_LOGIN_PASSWORD is configured", async () => {
-    process.env.METIS_LOGIN_PASSWORD = "golden-key";
+  it("verifies database-backed scrypt credentials and records the successful login", async () => {
     const auth = await loadAuthModule();
+    const hash = auth.createScryptHash("council-secret");
 
-    expect(auth.verifyCredentials("oracle", "golden-key")).toBe(true);
-    expect(auth.verifyCredentials("oracle", "wrong-key")).toBe(false);
-    expect(auth.verifyCredentials("intruder", "golden-key")).toBe(false);
+    findUserByIdentifier.mockResolvedValue({
+      id: 7,
+      username: "orion",
+      passwordHash: hash,
+      role: "admin",
+    });
+    recordSuccessfulLogin.mockResolvedValue(undefined);
+
+    await expect(auth.verifyCredentials("orion", "council-secret")).resolves.toEqual({
+      userId: 7,
+      username: "orion",
+      role: "admin",
+    });
+    expect(recordSuccessfulLogin).toHaveBeenCalledWith(7);
   });
 
-  it("verifies scrypt-hashed credentials when METIS_LOGIN_PASSWORD_HASH is configured", async () => {
-    process.env.METIS_LOGIN_PASSWORD = "temporary";
-    const seedModule = await loadAuthModule();
-    const hash = seedModule.createScryptHash("council-secret");
-
-    process.env.METIS_LOGIN_PASSWORD_HASH = hash;
-    delete process.env.METIS_LOGIN_PASSWORD;
-
+  it("rejects an invalid database-backed password", async () => {
     const auth = await loadAuthModule();
-    expect(auth.verifyCredentials("oracle", "council-secret")).toBe(true);
-    expect(auth.verifyCredentials("oracle", "invalid")).toBe(false);
+    const hash = auth.createScryptHash("council-secret");
+
+    findUserByIdentifier.mockResolvedValue({
+      id: 7,
+      username: "orion",
+      passwordHash: hash,
+      role: "admin",
+    });
+
+    await expect(auth.verifyCredentials("orion", "invalid")).resolves.toBeNull();
+    expect(recordSuccessfulLogin).not.toHaveBeenCalled();
   });
 
-  it("signs and verifies a session token", async () => {
-    process.env.METIS_LOGIN_PASSWORD = "golden-key";
+  it("signs and verifies a session token with the METIS database user payload", async () => {
     const auth = await loadAuthModule();
 
-    const token = await auth.signSession("oracle");
+    const token = await auth.signSession({
+      userId: 7,
+      username: "orion",
+      role: "admin",
+    });
     const session = await auth.verifySessionToken(token);
 
     expect(session).toEqual({
-      username: "oracle",
+      userId: 7,
+      username: "orion",
       role: "admin",
     });
   });
 
   it("throws a clear error when JWT_SECRET is missing but still allows credential checks to load", async () => {
     delete process.env.JWT_SECRET;
-    process.env.METIS_LOGIN_PASSWORD = "golden-key";
     const auth = await loadAuthModule();
+    const hash = auth.createScryptHash("golden-key");
 
-    expect(auth.verifyCredentials("oracle", "golden-key")).toBe(true);
-    await expect(auth.signSession("oracle")).rejects.toThrow("JWT_SECRET is not configured");
+    findUserByIdentifier.mockResolvedValue({
+      id: 1,
+      username: "orion",
+      passwordHash: hash,
+      role: "admin",
+    });
+    recordSuccessfulLogin.mockResolvedValue(undefined);
+
+    await expect(auth.verifyCredentials("orion", "golden-key")).resolves.toEqual({
+      userId: 1,
+      username: "orion",
+      role: "admin",
+    });
+    await expect(
+      auth.signSession({
+        userId: 1,
+        username: "orion",
+        role: "admin",
+      })
+    ).rejects.toThrow("JWT_SECRET is not configured");
   });
 });

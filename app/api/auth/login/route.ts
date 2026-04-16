@@ -6,14 +6,20 @@ export async function POST(request: Request) {
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  if (!username || !password || !verifyCredentials(username, password)) {
+  if (!username || !password) {
+    return NextResponse.redirect(new URL("/?error=invalid_credentials", request.url));
+  }
+
+  const authenticatedUser = await verifyCredentials(username, password);
+
+  if (!authenticatedUser) {
     return NextResponse.redirect(new URL("/?error=invalid_credentials", request.url));
   }
 
   let sessionToken: string;
 
   try {
-    sessionToken = await signSession(username);
+    sessionToken = await signSession(authenticatedUser);
   } catch {
     return NextResponse.redirect(new URL("/?error=auth_not_configured", request.url));
   }

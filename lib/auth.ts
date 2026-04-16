@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { findUserByIdentifier, recordSuccessfulLogin } from "@/lib/db";
 import { z } from "zod";
 
 const SESSION_COOKIE = "metis_session";
@@ -8,17 +9,17 @@ const SESSION_TTL_SECONDS = 60 * 60 * 12;
 
 const authEnvSchema = z.object({
   JWT_SECRET: z.string().optional(),
-  METIS_LOGIN_USERNAME: z.string().min(1).default("admin"),
-  METIS_LOGIN_PASSWORD: z.string().optional(),
-  METIS_LOGIN_PASSWORD_HASH: z.string().optional(),
 });
+
+type AuthenticatedSession = {
+  userId: number;
+  username: string;
+  role: string;
+};
 
 function getAuthEnv() {
   return authEnvSchema.parse({
     JWT_SECRET: process.env.JWT_SECRET,
-    METIS_LOGIN_USERNAME: process.env.METIS_LOGIN_USERNAME,
-    METIS_LOGIN_PASSWORD: process.env.METIS_LOGIN_PASSWORD,
-    METIS_LOGIN_PASSWORD_HASH: process.env.METIS_LOGIN_PASSWORD_HASH,
   });
 }
 
@@ -60,40 +61,54 @@ export function createScryptHash(password: string) {
   return `scrypt:${salt}:${hash}`;
 }
 
-export function verifyCredentials(username: string, password: string) {
-  const authEnv = getAuthEnv();
+export async function verifyCredentials(identifier: string, password: string): Promise<AuthenticatedSession | null> {
+  const user = await findUserByIdentifier(identifier);
 
-  if (!safeEqualStrings(username, authEnv.METIS_LOGIN_USERNAME)) {
-    return false;
+  if (!user?.username || !user.passwordHash) {
+    return null;
   }
 
-  if (authEnv.METIS_LOGIN_PASSWORD_HASH) {
-    return verifyHashedPassword(password, authEnv.METIS_LOGIN_PASSWORD_HASH);
+  if (!verifyHashedPassword(password, user.passwordHash)) {
+    return null;
   }
 
-  if (!authEnv.METIS_LOGIN_PASSWORD) {
-    return false;
-  }
+  await recordSuccessfulLogin(user.id);
 
-  return safeEqualStrings(password, authEnv.METIS_LOGIN_PASSWORD);
+  return {
+    userId: user.id,
+    username: user.username,
+    role: user.role,
+  };
 }
 
-export async function signSession(username: string) {
-  return new SignJWT({ role: "admin", fingerprint: createHash("sha256").update(username).digest("hex") })
+export async function signSession(session: AuthenticatedSession) {
+  return new SignJWT({
+    role: session.role,
+    username: session.username,
+    fingerprint: createHash("sha256").update(`${session.userId}:${session.username}`).digest("hex"),
+  })
     .setProtectedHeader({ alg: "HS256" })
-    .setSubject(username)
+    .setSubject(String(session.userId))
     .setIssuedAt()
     .setExpirationTime(`${SESSION_TTL_SECONDS}s`)
     .sign(getJwtSecret());
 }
 
-export async function verifySessionToken(token: string) {
+export async function verifySessionToken(token: string): Promise<AuthenticatedSession> {
   const verified = await jwtVerify(token, getJwtSecret(), {
     algorithms: ["HS256"],
   });
 
+  const userId = Number(verified.payload.sub);
+  const username = verified.payload.username;
+
+  if (!Number.isInteger(userId) || typeof username !== "string" || username.length === 0) {
+    throw new Error("Invalid METIS session payload.");
+  }
+
   return {
-    username: verified.payload.sub,
+    userId,
+    username,
     role: String(verified.payload.role ?? "admin"),
   };
 }

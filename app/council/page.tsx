@@ -15,7 +15,7 @@ export default async function CouncilPage({
 
   const params = await searchParams;
   const sessionId = params.session;
-  const initialTurns = sessionId ? await listCouncilTurns(sessionId) : [];
+  const initialTurns = sessionId ? await listCouncilTurns(sessionId, session.userId) : [];
 
   return (
     <CouncilInterface

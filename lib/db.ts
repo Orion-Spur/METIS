@@ -1,25 +1,35 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import mysql from "mysql2/promise";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { nanoid } from "nanoid";
-import { councilMessages, councilSessions } from "@/drizzle/schema";
-import type { MetisAgentOutput, MetisCouncilTurn } from "@/shared/metis";
+import postgres from "postgres";
+import { councilMessages, councilSessions, users } from "@/drizzle/schema";
 import { ENV } from "@/lib/env";
+import type { MetisAgentOutput, MetisCouncilTurn } from "@/shared/metis";
 
-let dbInstance: any;
-
-function getDb() {
+function createDb() {
   if (!ENV.DATABASE_URL) {
     throw new Error("DATABASE_URL is not configured for METIS persistence.");
   }
 
-  if (!dbInstance) {
-    const pool = mysql.createPool({
-      uri: ENV.DATABASE_URL,
-      connectionLimit: 5,
-    });
+  const client = postgres(ENV.DATABASE_URL, {
+    max: 5,
+    prepare: false,
+  });
 
-    dbInstance = drizzle(pool);
+  return drizzle(client, {
+    schema: {
+      users,
+      councilSessions,
+      councilMessages,
+    },
+  });
+}
+
+let dbInstance: ReturnType<typeof createDb> | null = null;
+
+function getDb() {
+  if (!dbInstance) {
+    dbInstance = createDb();
   }
 
   return dbInstance;
@@ -103,8 +113,94 @@ export function reconstructCouncilTurns(sessionId: string, rows: Array<typeof co
     .filter((turn): turn is MetisCouncilTurn => Boolean(turn));
 }
 
-export async function listCouncilTurns(sessionId: string) {
+export async function findUserByIdentifier(identifier: string) {
+  const normalizedIdentifier = identifier.trim();
   const db = getDb();
+  const result = await db
+    .select()
+    .from(users)
+    .where(or(eq(users.username, normalizedIdentifier), eq(users.email, normalizedIdentifier)))
+    .limit(1);
+
+  return result[0] ?? null;
+}
+
+export async function getUserById(userId: number) {
+  const db = getDb();
+  const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function upsertPasswordUser(input: {
+  username: string;
+  passwordHash: string;
+  role?: "user" | "admin";
+  email?: string | null;
+  name?: string | null;
+}) {
+  const now = new Date();
+  const normalizedUsername = input.username.trim();
+  const db = getDb();
+
+  await db
+    .insert(users)
+    .values({
+      openId: `local:${normalizedUsername}`,
+      username: normalizedUsername,
+      passwordHash: input.passwordHash,
+      name: input.name ?? normalizedUsername,
+      email: input.email ?? null,
+      loginMethod: "password",
+      role: input.role ?? "admin",
+      createdAt: now,
+      updatedAt: now,
+      lastSignedIn: now,
+    })
+    .onConflictDoUpdate({
+      target: users.username,
+      set: {
+        openId: `local:${normalizedUsername}`,
+        passwordHash: input.passwordHash,
+        name: input.name ?? normalizedUsername,
+        email: input.email ?? null,
+        loginMethod: "password",
+        role: input.role ?? "admin",
+        updatedAt: now,
+      },
+    });
+
+  return findUserByIdentifier(normalizedUsername);
+}
+
+export async function recordSuccessfulLogin(userId: number) {
+  const db = getDb();
+  const now = new Date();
+
+  await db
+    .update(users)
+    .set({
+      lastSignedIn: now,
+      updatedAt: now,
+      loginMethod: "password",
+    })
+    .where(eq(users.id, userId));
+}
+
+export async function listCouncilTurns(sessionId: string, userId?: number) {
+  const db = getDb();
+
+  if (typeof userId === "number") {
+    const matchingSession = await db
+      .select({ id: councilSessions.id })
+      .from(councilSessions)
+      .where(and(eq(councilSessions.id, sessionId), eq(councilSessions.userId, userId)))
+      .limit(1);
+
+    if (!matchingSession[0]) {
+      return [];
+    }
+  }
+
   const rows = await db
     .select()
     .from(councilMessages)
@@ -114,14 +210,18 @@ export async function listCouncilTurns(sessionId: string) {
   return reconstructCouncilTurns(sessionId, rows);
 }
 
-export async function getOrCreateSession(existingSessionId: string | undefined, username: string) {
+export async function getOrCreateSession(existingSessionId: string | undefined, user: { id?: number; username: string }) {
   const db = getDb();
 
   if (existingSessionId) {
     const existing = await db
       .select()
       .from(councilSessions)
-      .where(eq(councilSessions.id, existingSessionId))
+      .where(
+        typeof user.id === "number"
+          ? and(eq(councilSessions.id, existingSessionId), eq(councilSessions.userId, user.id))
+          : eq(councilSessions.id, existingSessionId)
+      )
       .limit(1);
 
     if (existing[0]) {
@@ -129,14 +229,15 @@ export async function getOrCreateSession(existingSessionId: string | undefined, 
     }
   }
 
+  const now = new Date();
   const session = {
     id: nanoid(20),
-    userId: 0,
-    title: `Council session for ${username}`,
+    userId: user.id ?? 0,
+    title: `Council session for ${user.username}`,
     status: "active" as const,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastMessageAt: new Date(),
+    createdAt: now,
+    updatedAt: now,
+    lastMessageAt: now,
   };
 
   await db.insert(councilSessions).values(session);
@@ -145,13 +246,17 @@ export async function getOrCreateSession(existingSessionId: string | undefined, 
 
 export async function persistCouncilTurn(input: {
   sessionId?: string;
+  userId?: number;
   username: string;
   userMessage: string;
   outputs: MetisAgentOutput[];
   synthesis: MetisAgentOutput;
 }) {
   const db = getDb();
-  const session = await getOrCreateSession(input.sessionId, input.username);
+  const session = await getOrCreateSession(input.sessionId, {
+    id: input.userId,
+    username: input.username,
+  });
   let sequenceOrder = await getNextSequenceOrder(session.id);
 
   await db.insert(councilMessages).values({
@@ -208,7 +313,17 @@ export async function persistCouncilTurn(input: {
   };
 }
 
-export async function listRecentSessions() {
+export async function listRecentSessions(userId?: number) {
   const db = getDb();
+
+  if (typeof userId === "number") {
+    return db
+      .select()
+      .from(councilSessions)
+      .where(eq(councilSessions.userId, userId))
+      .orderBy(desc(councilSessions.updatedAt))
+      .limit(20);
+  }
+
   return db.select().from(councilSessions).orderBy(desc(councilSessions.updatedAt)).limit(20);
 }

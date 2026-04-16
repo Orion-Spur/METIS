@@ -1,6 +1,6 @@
 # METIS
 
-**METIS** is a secure, cinematic **Next.js** web application for running a four-agent AI council session. The first release is designed for **Vercel deployment**, while the persistence and orchestration structure are intentionally prepared for a later migration to **AWS-backed long-running workloads**.
+**METIS** is a secure, cinematic **Next.js** web application for running a four-agent AI council session. The current release is designed for **Vercel deployment** while using **Neon PostgreSQL** for authentication and council-history persistence.
 
 ## Current Product Scope
 
@@ -20,17 +20,16 @@ The application expects the following environment variables.
 | Variable | Purpose | Required for |
 |---|---|---|
 | `JWT_SECRET` | Signs and verifies secure METIS session cookies | Authentication |
-| `METIS_LOGIN_USERNAME` | Username accepted by the login form | Login |
-| `METIS_LOGIN_PASSWORD` or `METIS_LOGIN_PASSWORD_HASH` | Plaintext password for quick setup, or preferred scrypt hash for production | Login |
+| `METIS_DATABASE_URL` | Preferred Neon PostgreSQL connection string override used by the app at runtime | Persistence |
+| `DATABASE_URL` | Fallback database URL when the METIS-specific override is not present | Persistence fallback |
 | `ANTHROPIC_API_KEY` | Provider key for **Metis** | Orchestration |
 | `AZUREGPT54_API_KEY` | Provider key for **Athena** | Orchestration |
 | `AZUREGPT54_ENDPOINT` | Azure OpenAI endpoint base URL | Athena routing |
 | `AZUREGPT54_DEPLOYMENT` | Azure deployment name for the GPT model | Athena routing |
 | `GEMINI_API_KEY` | Provider key for **Argus** | Orchestration |
 | `XAI_API_KEY` | Provider key for **Loki** | Orchestration |
-| `DATABASE_URL` | MySQL-compatible database connection string | Persistence |
 
-> For production, prefer `METIS_LOGIN_PASSWORD_HASH` over `METIS_LOGIN_PASSWORD` so the repository never depends on a plaintext login secret.
+> Login credentials are now stored in the `users` table inside Neon. The application verifies the submitted username and password against the stored scrypt password hash instead of reading a login secret from environment variables.
 
 ## Local Development
 
@@ -50,7 +49,7 @@ pnpm build
 
 ## Database and Persistence Model
 
-The current schema is structured so it can move cleanly from the current hosted database to **AWS RDS** later.
+The current schema is structured around **Neon PostgreSQL** and can still move cleanly to another managed PostgreSQL target later if needed.
 
 | Table | Purpose |
 |---|---|
@@ -58,7 +57,7 @@ The current schema is structured so it can move cleanly from the current hosted 
 | `councilSessions` | Long-lived council conversation containers |
 | `councilMessages` | User prompts, specialist outputs, and Metis synthesis messages |
 
-This schema keeps the council history explicit and portable, which makes future migration to **AWS RDS** straightforward.
+This schema keeps the council history explicit and portable while supporting database-backed login and session scoping in the current Neon deployment.
 
 ## Vercel Deployment Path
 
@@ -67,16 +66,19 @@ The active application is a **Next.js App Router** project and is ready to deplo
 | Deployment check | Requirement |
 |---|---|
 | **Authentication secret** | Set `JWT_SECRET` in Vercel to a strong random string with at least 16 characters before the first deployment. |
-| **Login credentials** | Set `METIS_LOGIN_USERNAME` and either `METIS_LOGIN_PASSWORD` or `METIS_LOGIN_PASSWORD_HASH`. |
+| **Database target** | Set `METIS_DATABASE_URL` to the Neon PostgreSQL connection string so the app prefers Neon even if the platform-managed `DATABASE_URL` remains unchanged. |
+| **Admin access** | Seed the `users` table with the initial admin username and scrypt password hash before testing login. |
 | **Council providers** | Set the four provider keys plus the Azure endpoint and deployment variables. |
 | **Validation** | Run `pnpm test` and `pnpm build` before shipping. |
 
 If `JWT_SECRET` is missing, the homepage will stay available but login attempts will return an inline configuration warning instead of crashing the server bundle.
 
 1. Add all required environment variables in the Vercel project settings.
-2. Confirm `pnpm test` and `pnpm build` pass.
-3. Deploy the repository to Vercel.
-4. Verify homepage authentication, protected `/council` access, and council orchestration behavior.
+2. Set `METIS_DATABASE_URL` to the Neon PostgreSQL connection string.
+3. Confirm the `users`, `councilSessions`, and `councilMessages` tables exist and that the admin user has been seeded.
+4. Confirm `pnpm test` and `pnpm build` pass.
+5. Deploy the repository to Vercel.
+6. Verify homepage authentication, protected `/council` access, and council orchestration behavior.
 
 ## Planned AWS Migration Path
 

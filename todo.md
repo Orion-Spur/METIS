@@ -37,3 +37,16 @@
 - [x] Fix the deployed Next.js runtime failure caused by JWT_SECRET resolving as undefined in the target environment
 - [x] Verify the authentication env-loading strategy works both inside the current project runtime and on Vercel
 - [x] Update the deployment documentation so required auth secrets are configured correctly in Vercel before publish
+- [x] Choose the correct AWS database service for METIS chat persistence and authenticated access
+- [x] Prepare production-ready SQL to create the METIS users, council sessions, and council messages tables on AWS
+- [x] Clarify how login access should be seeded initially versus how the current environment-based login flow works
+- [x] Replace the temporary AWS database path with Neon as the active METIS relational database target
+- [x] Prepare Neon-compatible setup guidance and schema guidance for storing council chats
+- [x] Decide whether to keep environment-based login temporarily or refactor METIS to DB-backed login on Neon
+- [x] Rewrite Drizzle schema from MySQL dialect to PostgreSQL dialect for the live Neon tables
+- [x] Replace the MySQL database client with a Neon/PostgreSQL database client in the METIS data layer
+- [x] Refactor authentication to verify login credentials against the public.users table in Neon
+- [x] Seed or upsert the METIS admin user record in Neon with a valid password hash
+- [x] Update the active database configuration to the Neon connection string via the `METIS_DATABASE_URL` override
+- [x] Re-run Vitest, production build, and final project health checks after the Neon migration
+- [x] Add a METIS-specific database URL override so the app can use Neon even though the built-in `DATABASE_URL` secret cannot be edited directly in this project
