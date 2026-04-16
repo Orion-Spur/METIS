@@ -17,11 +17,15 @@ export type MetisAgentOutput = {
   content: string;
 };
 
+export type MetisCouncilMessage = MetisAgentOutput & {
+  sequenceOrder: number;
+};
+
 export type MetisCouncilTurn = {
   sessionId: string;
   userMessage: string;
-  outputs: MetisAgentOutput[];
-  synthesis: MetisAgentOutput;
+  discussion: MetisCouncilMessage[];
+  synthesis: MetisCouncilMessage;
   createdAt: number;
 };
 
@@ -41,7 +45,7 @@ export const metisAgentProfiles: Record<
     borderClassName: "border-primary/40",
     glowClassName: "shadow-[0_0_40px_rgba(205,158,60,0.15)]",
     description:
-      "Coordinates the council, reconciles disagreements, and presents the final synthesis.",
+      "Chairs the meeting, keeps the council on track, and closes with the final synthesis.",
   },
   Athena: {
     title: "Strategist",
@@ -57,7 +61,7 @@ export const metisAgentProfiles: Record<
     borderClassName: "border-emerald-300/30",
     glowClassName: "shadow-[0_0_40px_rgba(110,231,183,0.12)]",
     description:
-      "Examines evidence, patterns, and trade-offs before the council acts.",
+      "Examines evidence, patterns, trade-offs, and proof thresholds before the council acts.",
   },
   Loki: {
     title: "Critic",

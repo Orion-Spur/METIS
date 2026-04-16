@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       userId: session.userId,
       username: session.username,
       userMessage: body.message,
-      outputs: turn.outputs,
+      discussion: turn.discussion,
       synthesis: turn.synthesis,
     });
 

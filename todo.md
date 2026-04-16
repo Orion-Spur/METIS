@@ -53,3 +53,9 @@
 - [x] Replace the contents of the GitHub repository `orion-Spur/metis` with the current validated METIS application
 - [x] Verify that the GitHub repository reflects the latest METIS code after the push
 - [x] Fix the reported login failure for the seeded `orion` admin account and validate the sign-in flow end to end
+- [ ] Fix the reported `JWT_SECRET` configuration failure so login works in the user’s active deployment target
+- [x] Convert one-shot council responses into a chaired multi-turn discussion led by Metis
+- [x] Pass prior agent turns into later agent prompts so specialists can react to one another during a session
+- [x] Update the council UI to render a chronological discussion transcript instead of a single combined response block
+- [x] Add or update automated tests covering the chaired debate flow and transcript rendering
+- [x] Review the user-provided council excerpts and calibrate the chaired debate flow against the observed current outputs

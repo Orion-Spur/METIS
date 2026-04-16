@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { LogOut, SendHorizontal } from "lucide-react";
+import CouncilTurnCard from "@/components/CouncilTurnCard";
 import type { MetisCouncilTurn } from "@/shared/metis";
 import { metisAgentProfiles } from "@/shared/metis";
 
@@ -21,7 +22,7 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
   const councilStatus = useMemo(() => {
     if (isPending) return "Council is deliberating";
     if (turns.length === 0) return "Awaiting the first brief";
-    return "Council is active";
+    return "Live chaired debate active";
   }, [isPending, turns.length]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -43,7 +44,9 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
       });
 
       if (!response.ok) {
-        const payload = await response.json().catch(() => ({ error: "The council could not process that request." }));
+        const payload = await response
+          .json()
+          .catch(() => ({ error: "The council could not process that request." }));
         setError(payload.error ?? "The council could not process that request.");
         return;
       }
@@ -61,10 +64,16 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
         <header className="rounded-[2rem] border border-[rgba(214,162,79,0.22)] bg-[rgba(10,8,6,0.82)] p-5 shadow-[0_0_40px_rgba(214,162,79,0.12)] backdrop-blur-xl">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.5em] text-[rgba(214,162,79,0.78)]">METIS Council</p>
-              <h1 className="mt-3 font-serif text-5xl text-[#f6e7be]">Intelligence. Strategy. Execution.</h1>
+              <p className="text-xs uppercase tracking-[0.5em] text-[rgba(214,162,79,0.78)]">
+                METIS Council
+              </p>
+              <h1 className="mt-3 font-serif text-5xl text-[#f6e7be]">
+                Intelligence. Strategy. Execution.
+              </h1>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-[rgba(243,231,192,0.76)]">
-                Welcome, {username}. Metis orchestrates the council while Athena frames strategy, Argus examines evidence, and Loki pressure-tests the reasoning.
+                Welcome, {username}. Metis now chairs each meeting in sequence, pushes the
+                specialists to respond to one another, and closes with a final synthesis after an
+                active discussion.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -86,13 +95,22 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
 
         <section className="grid gap-4 xl:grid-cols-[1.1fr_2.2fr]">
           <aside className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
-            <div className="mb-4 text-xs uppercase tracking-[0.4em] text-[rgba(214,162,79,0.75)]">Council Members</div>
+            <div className="mb-4 text-xs uppercase tracking-[0.4em] text-[rgba(214,162,79,0.75)]">
+              Council Members
+            </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               {Object.entries(metisAgentProfiles).map(([name, profile]) => (
-                <article key={name} className={`rounded-[1.5rem] border bg-black/25 p-4 ${profile.borderClassName} ${profile.glowClassName}`}>
-                  <div className={`text-xs uppercase tracking-[0.35em] ${profile.accentClassName}`}>{name}</div>
+                <article
+                  key={name}
+                  className={`rounded-[1.5rem] border bg-black/25 p-4 ${profile.borderClassName} ${profile.glowClassName}`}
+                >
+                  <div className={`text-xs uppercase tracking-[0.35em] ${profile.accentClassName}`}>
+                    {name}
+                  </div>
                   <div className="mt-2 font-serif text-2xl text-[#f7ebc8]">{profile.title}</div>
-                  <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.72)]">{profile.description}</p>
+                  <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.72)]">
+                    {profile.description}
+                  </p>
                 </article>
               ))}
             </div>
@@ -100,60 +118,36 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
 
           <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
             <div className="flex min-h-[55vh] flex-col gap-4">
-              <div className="text-xs uppercase tracking-[0.4em] text-[rgba(214,162,79,0.75)]">Council Transcript</div>
+              <div className="text-xs uppercase tracking-[0.4em] text-[rgba(214,162,79,0.75)]">
+                Council Transcript
+              </div>
 
               <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
                 {turns.length === 0 ? (
                   <div className="rounded-[1.5rem] border border-dashed border-[rgba(214,162,79,0.22)] bg-black/20 p-6 text-sm leading-7 text-[rgba(243,231,192,0.68)]">
-                    Submit the first brief to convene the council. The response format is structured so each turn records confidence, recommended action, and summary rationale.
+                    Submit the first brief to convene the council. Metis will open the meeting,
+                    Athena, Argus, and Loki will respond in sequence, and the transcript will show
+                    the full discussion before the closing synthesis.
                   </div>
                 ) : (
                   turns.map((turn, index) => (
-                    <article key={`${turn.sessionId}-${turn.createdAt}-${index}`} className="rounded-[1.75rem] border border-[rgba(214,162,79,0.16)] bg-black/20 p-5">
-                      <div className="rounded-[1.35rem] border border-[rgba(214,162,79,0.18)] bg-[rgba(214,162,79,0.06)] p-4">
-                        <div className="text-xs uppercase tracking-[0.32em] text-[rgba(214,162,79,0.75)]">User brief</div>
-                        <p className="mt-3 text-sm leading-7 text-[rgba(249,239,212,0.92)]">{turn.userMessage}</p>
-                      </div>
-
-                      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                        {turn.outputs.map((output) => {
-                          const profile = metisAgentProfiles[output.agentName];
-                          return (
-                            <section key={`${turn.createdAt}-${output.agentName}`} className={`rounded-[1.35rem] border bg-[rgba(12,10,8,0.9)] p-4 ${profile.borderClassName}`}>
-                              <div className={`text-xs uppercase tracking-[0.32em] ${profile.accentClassName}`}>{output.agentName}</div>
-                              <p className="mt-3 text-sm leading-7 text-[rgba(247,236,209,0.9)]">{output.content}</p>
-                              <dl className="mt-4 space-y-2 text-xs uppercase tracking-[0.26em] text-[rgba(214,162,79,0.75)]">
-                                <div className="flex items-center justify-between gap-4">
-                                  <dt>Confidence</dt>
-                                  <dd>{Math.round(output.confidence * 100)}%</dd>
-                                </div>
-                                <div className="flex items-center justify-between gap-4">
-                                  <dt>Action</dt>
-                                  <dd>{output.recommendedAction.replaceAll("_", " ")}</dd>
-                                </div>
-                              </dl>
-                              <p className="mt-4 text-xs leading-6 text-[rgba(243,231,192,0.65)]">{output.summaryRationale}</p>
-                            </section>
-                          );
-                        })}
-                      </div>
-
-                      <section className={`mt-4 rounded-[1.5rem] border bg-[rgba(14,10,6,0.94)] p-5 ${metisAgentProfiles.Metis.borderClassName}`}>
-                        <div className={`text-xs uppercase tracking-[0.35em] ${metisAgentProfiles.Metis.accentClassName}`}>Metis synthesis</div>
-                        <p className="mt-3 text-sm leading-7 text-[rgba(249,239,212,0.95)]">{turn.synthesis.content}</p>
-                        <div className="mt-4 flex flex-wrap gap-3 text-xs uppercase tracking-[0.28em] text-[rgba(214,162,79,0.76)]">
-                          <span>Confidence {Math.round(turn.synthesis.confidence * 100)}%</span>
-                          <span>Action {turn.synthesis.recommendedAction.replaceAll("_", " ")}</span>
-                        </div>
-                        <p className="mt-4 text-xs leading-6 text-[rgba(243,231,192,0.7)]">{turn.synthesis.summaryRationale}</p>
-                      </section>
-                    </article>
+                    <CouncilTurnCard
+                      key={`${turn.sessionId}-${turn.createdAt}-${index}`}
+                      turn={turn}
+                      turnIndex={index}
+                    />
                   ))
                 )}
               </div>
 
-              <form onSubmit={handleSubmit} className="mt-2 rounded-[1.75rem] border border-[rgba(214,162,79,0.18)] bg-black/20 p-4">
-                <label htmlFor="council-brief" className="text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.75)]">
+              <form
+                onSubmit={handleSubmit}
+                className="mt-2 rounded-[1.75rem] border border-[rgba(214,162,79,0.18)] bg-black/20 p-4"
+              >
+                <label
+                  htmlFor="council-brief"
+                  className="text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.75)]"
+                >
                   New brief
                 </label>
                 <textarea
@@ -165,7 +159,9 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
                 />
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-xs leading-6 text-[rgba(243,231,192,0.62)]">
-                    Each council turn records the specialist responses and the final synthesis for later persistence and AWS migration.
+                    Each brief now produces a chaired sequence of exchanges, not a single combined
+                    block, so you can inspect how the reasoning evolves before Metis closes the
+                    meeting.
                   </div>
                   <button
                     type="submit"
@@ -173,7 +169,7 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
                     className="inline-flex items-center justify-center gap-2 rounded-full bg-[#d6a24f] px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#140d05] transition hover:bg-[#e0b163] disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <SendHorizontal className="h-4 w-4" />
-                    {isPending ? "Deliberating" : "Convene council"}
+                    {isPending ? "Debating" : "Convene council"}
                   </button>
                 </div>
                 {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}

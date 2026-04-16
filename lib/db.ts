@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 import postgres from "postgres";
 import { councilMessages, councilSessions, users } from "@/drizzle/schema";
 import { ENV } from "@/lib/env";
-import type { MetisAgentOutput, MetisCouncilTurn } from "@/shared/metis";
+import type { MetisCouncilMessage, MetisCouncilTurn } from "@/shared/metis";
 
 function createDb() {
   if (!ENV.DATABASE_URL) {
@@ -41,22 +41,27 @@ function toNumber(value: string | number | null | undefined) {
   return null;
 }
 
-function mapTurn(rows: Array<(typeof councilMessages.$inferSelect) & { sessionCreatedAt?: Date | null }>, sessionId: string): MetisCouncilTurn | null {
+function mapAgentMessage(row: typeof councilMessages.$inferSelect): MetisCouncilMessage {
+  return {
+    sequenceOrder: row.sequenceOrder,
+    agentName: row.agentName ?? "Metis",
+    content: row.content,
+    confidence: toNumber(row.confidence) ?? 0,
+    recommendedAction: row.recommendedAction ?? "request_clarification",
+    summaryRationale: row.summaryRationale ?? "",
+  };
+}
+
+function mapTurn(rows: Array<typeof councilMessages.$inferSelect>, sessionId: string): MetisCouncilTurn | null {
   if (rows.length === 0) {
     return null;
   }
 
   const userMessage = rows.find((row) => row.role === "user");
   const synthesis = rows.find((row) => row.role === "synthesis");
-  const outputs = rows
+  const discussion = rows
     .filter((row) => row.role === "agent" && row.agentName)
-    .map((row) => ({
-      agentName: row.agentName!,
-      content: row.content,
-      confidence: toNumber(row.confidence) ?? 0,
-      recommendedAction: row.recommendedAction ?? "request_clarification",
-      summaryRationale: row.summaryRationale ?? "",
-    }));
+    .map(mapAgentMessage);
 
   if (!userMessage || !synthesis || !synthesis.agentName) {
     return null;
@@ -65,14 +70,8 @@ function mapTurn(rows: Array<(typeof councilMessages.$inferSelect) & { sessionCr
   return {
     sessionId,
     userMessage: userMessage.content,
-    outputs,
-    synthesis: {
-      agentName: synthesis.agentName,
-      content: synthesis.content,
-      confidence: toNumber(synthesis.confidence) ?? 0,
-      recommendedAction: synthesis.recommendedAction ?? "request_clarification",
-      summaryRationale: synthesis.summaryRationale ?? "",
-    },
+    discussion,
+    synthesis: mapAgentMessage(synthesis),
     createdAt: new Date(userMessage.createdAt).getTime(),
   };
 }
@@ -220,7 +219,7 @@ export async function getOrCreateSession(existingSessionId: string | undefined, 
       .where(
         typeof user.id === "number"
           ? and(eq(councilSessions.id, existingSessionId), eq(councilSessions.userId, user.id))
-          : eq(councilSessions.id, existingSessionId)
+          : eq(councilSessions.id, existingSessionId),
       )
       .limit(1);
 
@@ -249,8 +248,8 @@ export async function persistCouncilTurn(input: {
   userId?: number;
   username: string;
   userMessage: string;
-  outputs: MetisAgentOutput[];
-  synthesis: MetisAgentOutput;
+  discussion: MetisCouncilMessage[];
+  synthesis: MetisCouncilMessage;
 }) {
   const db = getDb();
   const session = await getOrCreateSession(input.sessionId, {
@@ -272,17 +271,17 @@ export async function persistCouncilTurn(input: {
     createdAt: new Date(),
   });
 
-  for (const output of input.outputs) {
+  for (const message of input.discussion) {
     await db.insert(councilMessages).values({
       id: nanoid(20),
       sessionId: session.id,
       sequenceOrder: ++sequenceOrder,
       role: "agent",
-      agentName: output.agentName,
-      content: output.content,
-      confidence: output.confidence.toFixed(2),
-      recommendedAction: output.recommendedAction,
-      summaryRationale: output.summaryRationale,
+      agentName: message.agentName,
+      content: message.content,
+      confidence: message.confidence.toFixed(2),
+      recommendedAction: message.recommendedAction,
+      summaryRationale: message.summaryRationale,
       createdAt: new Date(),
     });
   }
