@@ -54,4 +54,13 @@ describe("METIS authentication utilities", () => {
       role: "admin",
     });
   });
+
+  it("throws a clear error when JWT_SECRET is missing but still allows credential checks to load", async () => {
+    delete process.env.JWT_SECRET;
+    process.env.METIS_LOGIN_PASSWORD = "golden-key";
+    const auth = await loadAuthModule();
+
+    expect(auth.verifyCredentials("oracle", "golden-key")).toBe(true);
+    await expect(auth.signSession("oracle")).rejects.toThrow("JWT_SECRET is not configured");
+  });
 });

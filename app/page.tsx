@@ -9,7 +9,9 @@ export default async function HomePage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const params = await searchParams;
-  const showError = params.error === "invalid_credentials";
+  const errorCode = params.error;
+  const invalidCredentials = errorCode === "invalid_credentials";
+  const authNotConfigured = errorCode === "auth_not_configured";
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] px-6 py-10">
@@ -69,9 +71,14 @@ export default async function HomePage({
             >
               Enter
             </button>
-            {showError ? (
+            {invalidCredentials ? (
               <p className="text-center text-sm text-rose-300">
                 The supplied credentials were not accepted.
+              </p>
+            ) : null}
+            {authNotConfigured ? (
+              <p className="text-center text-sm text-amber-200">
+                Authentication is not configured yet. Set <span className="font-semibold text-[#f7e9ca]">JWT_SECRET</span> in the deployment environment and try again.
               </p>
             ) : null}
           </div>

@@ -64,7 +64,16 @@ This schema keeps the council history explicit and portable, which makes future 
 
 The active application is a **Next.js App Router** project and is ready to deploy on Vercel once the environment variables are set.
 
-1. Add all required environment variables in the deployment environment.
+| Deployment check | Requirement |
+|---|---|
+| **Authentication secret** | Set `JWT_SECRET` in Vercel to a strong random string with at least 16 characters before the first deployment. |
+| **Login credentials** | Set `METIS_LOGIN_USERNAME` and either `METIS_LOGIN_PASSWORD` or `METIS_LOGIN_PASSWORD_HASH`. |
+| **Council providers** | Set the four provider keys plus the Azure endpoint and deployment variables. |
+| **Validation** | Run `pnpm test` and `pnpm build` before shipping. |
+
+If `JWT_SECRET` is missing, the homepage will stay available but login attempts will return an inline configuration warning instead of crashing the server bundle.
+
+1. Add all required environment variables in the Vercel project settings.
 2. Confirm `pnpm test` and `pnpm build` pass.
 3. Deploy the repository to Vercel.
 4. Verify homepage authentication, protected `/council` access, and council orchestration behavior.

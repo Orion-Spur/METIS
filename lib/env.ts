@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.string().optional(),
-  JWT_SECRET: z.string().min(16),
+  JWT_SECRET: z.string().min(16).optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   AZUREGPT54_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),

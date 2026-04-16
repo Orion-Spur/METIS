@@ -34,3 +34,6 @@
 - [x] Harden the xAI request path against transient TLS/network resets so live council validation is reliable during deployment checks
 - [x] Harden the Azure request path and Azure live validation test against transient TLS/network resets so deployment checks remain reliable
 - [x] Harden the Anthropic request path and Anthropic live validation test against transient TLS/network resets so final deployment checks remain reliable
+- [x] Fix the deployed Next.js runtime failure caused by JWT_SECRET resolving as undefined in the target environment
+- [x] Verify the authentication env-loading strategy works both inside the current project runtime and on Vercel
+- [x] Update the deployment documentation so required auth secrets are configured correctly in Vercel before publish

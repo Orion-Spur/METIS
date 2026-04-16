@@ -10,7 +10,14 @@ export async function POST(request: Request) {
     return NextResponse.redirect(new URL("/?error=invalid_credentials", request.url));
   }
 
-  const sessionToken = await signSession(username);
+  let sessionToken: string;
+
+  try {
+    sessionToken = await signSession(username);
+  } catch {
+    return NextResponse.redirect(new URL("/?error=auth_not_configured", request.url));
+  }
+
   const response = NextResponse.redirect(new URL("/council", request.url));
 
   response.cookies.set({
