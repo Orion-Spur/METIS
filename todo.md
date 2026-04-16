@@ -50,5 +50,6 @@
 - [x] Update the active database configuration to the Neon connection string via the `METIS_DATABASE_URL` override
 - [x] Re-run Vitest, production build, and final project health checks after the Neon migration
 - [x] Add a METIS-specific database URL override so the app can use Neon even though the built-in `DATABASE_URL` secret cannot be edited directly in this project
-- [ ] Replace the contents of the GitHub repository `orion-Spur/metis` with the current validated METIS application
-- [ ] Verify that the GitHub repository reflects the latest METIS code after the push
+- [x] Replace the contents of the GitHub repository `orion-Spur/metis` with the current validated METIS application
+- [x] Verify that the GitHub repository reflects the latest METIS code after the push
+- [x] Fix the reported login failure for the seeded `orion` admin account and validate the sign-in flow end to end

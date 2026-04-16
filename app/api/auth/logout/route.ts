@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSessionCookieName } from "@/lib/auth";
+import { createPublicUrl } from "@/lib/request-origin";
 
 export async function POST(request: Request) {
-  const response = NextResponse.redirect(new URL("/", request.url));
+  const response = NextResponse.redirect(createPublicUrl(request, "/"));
 
   response.cookies.set({
     name: getSessionCookieName(),
