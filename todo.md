@@ -53,9 +53,17 @@
 - [x] Replace the contents of the GitHub repository `orion-Spur/metis` with the current validated METIS application
 - [x] Verify that the GitHub repository reflects the latest METIS code after the push
 - [x] Fix the reported login failure for the seeded `orion` admin account and validate the sign-in flow end to end
-- [ ] Fix the reported `JWT_SECRET` configuration failure so login works in the user’s active deployment target
+- [x] Fix the reported `JWT_SECRET` configuration failure so login works in the user’s active deployment target
 - [x] Convert one-shot council responses into a chaired multi-turn discussion led by Metis
 - [x] Pass prior agent turns into later agent prompts so specialists can react to one another during a session
 - [x] Update the council UI to render a chronological discussion transcript instead of a single combined response block
 - [x] Add or update automated tests covering the chaired debate flow and transcript rendering
 - [x] Review the user-provided council excerpts and calibrate the chaired debate flow against the observed current outputs
+- [x] Re-verify login on the active deployment target with a confirmed valid seeded password and capture successful session evidence before closing the auth issue
+- [x] Confirm which deployment URL was validated for the JWT_SECRET fix and document that verified target
+- [x] Remove the pre-assigned public role framing from the agent prompts while keeping the agent names
+- [x] Update the council prompts so each agent is told they were selected for a distinct contribution rather than a fixed label
+- [x] Make the agents explicitly answerable to Orion in the system prompt framing and visible council copy where appropriate
+- [ ] Publish the latest checkpoint so the active metis.ooo deployment receives the updated prompt and UI framing
+- [ ] Re-run browser verification on https://www.metis.ooo/council after publication and confirm the role labels are gone from the live experience
+- [ ] Submit a live council brief on metis.ooo after publication and confirm the transcript reflects distinct-contribution framing and accountability to Orion

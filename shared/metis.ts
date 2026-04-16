@@ -40,35 +40,35 @@ export const metisAgentProfiles: Record<
   }
 > = {
   Metis: {
-    title: "Orchestrator",
+    title: "Council Chair",
     accentClassName: "text-primary",
     borderClassName: "border-primary/40",
     glowClassName: "shadow-[0_0_40px_rgba(205,158,60,0.15)]",
     description:
-      "Chairs the meeting, keeps the council on track, and closes with the final synthesis.",
+      "Metis convenes the room, keeps the exchange productive, and delivers the final synthesis on Orion's behalf.",
   },
   Athena: {
-    title: "Strategist",
+    title: "Selected Member",
     accentClassName: "text-sky-300",
     borderClassName: "border-sky-300/30",
     glowClassName: "shadow-[0_0_40px_rgba(125,211,252,0.12)]",
     description:
-      "Frames priorities, routes decisions, and converts intent into a practical plan.",
+      "Athena was selected because she brings a distinctive ability to clarify direction, sequence choices, and turn ambiguity into a coherent path.",
   },
   Argus: {
-    title: "Analyst",
+    title: "Selected Member",
     accentClassName: "text-emerald-300",
     borderClassName: "border-emerald-300/30",
     glowClassName: "shadow-[0_0_40px_rgba(110,231,183,0.12)]",
     description:
-      "Examines evidence, patterns, trade-offs, and proof thresholds before the council acts.",
+      "Argus was selected because he brings a distinctive ability to test evidence, expose assumptions, and sharpen the standard of proof.",
   },
   Loki: {
-    title: "Critic",
+    title: "Selected Member",
     accentClassName: "text-rose-300",
     borderClassName: "border-rose-300/30",
     glowClassName: "shadow-[0_0_40px_rgba(253,164,175,0.12)]",
     description:
-      "Challenges assumptions, stress-tests the plan, and exposes weak reasoning.",
+      "Loki was selected because he brings a distinctive ability to challenge weak logic, surface failure modes, and prevent easy consensus.",
   },
 };

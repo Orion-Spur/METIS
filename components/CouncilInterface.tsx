@@ -72,8 +72,8 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-[rgba(243,231,192,0.76)]">
                 Welcome, {username}. Metis now chairs each meeting in sequence, pushes the
-                specialists to respond to one another, and closes with a final synthesis after an
-                active discussion.
+                named council members to respond to one another, and closes with a final synthesis
+                after an active discussion answerable to Orion.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -126,8 +126,9 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
                 {turns.length === 0 ? (
                   <div className="rounded-[1.5rem] border border-dashed border-[rgba(214,162,79,0.22)] bg-black/20 p-6 text-sm leading-7 text-[rgba(243,231,192,0.68)]">
                     Submit the first brief to convene the council. Metis will open the meeting,
-                    Athena, Argus, and Loki will respond in sequence, and the transcript will show
-                    the full discussion before the closing synthesis.
+                    Athena, Argus, and Loki will respond in sequence as distinct contributors, and
+                    the transcript will show the full discussion before the closing synthesis for
+                    Orion.
                   </div>
                 ) : (
                   turns.map((turn, index) => (
@@ -160,8 +161,8 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="text-xs leading-6 text-[rgba(243,231,192,0.62)]">
                     Each brief now produces a chaired sequence of exchanges, not a single combined
-                    block, so you can inspect how the reasoning evolves before Metis closes the
-                    meeting.
+                    block, so you can inspect how the reasoning evolves across named contributors
+                    before Metis closes the meeting for Orion.
                   </div>
                   <button
                     type="submit"
