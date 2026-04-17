@@ -84,3 +84,11 @@
 - [x] Verify the Vercel deployment receives the new METIS streaming council update
 - [x] Validate real-time chat and Orion interjection behavior on the live production site after the deployment updates
 - [ ] Investigate and fix the production interjection flow so the live session remains in the expected active state after Orion redirects mid-discussion, then re-verify it end to end
+- [ ] Redesign the homepage/login so the full entry experience fits on one non-scrolling black-background screen
+- [ ] Identify and document the current METIS agent prompt file locations for Orion
+- [ ] Design and implement a company profile data model in Postgres so products, mission, constraints, team size, and related business context can be injected into every council agent prompt
+- [ ] Design and implement session memory so agents can reliably read and build on current-session conversation history
+- [ ] Design cross-session learning so prior session insights can be referenced deliberately and safely in later council sessions
+- [ ] Add history browsing and chat search capabilities inside the authenticated METIS experience
+- [ ] Add limited-user administration so Orion can grant or revoke access for a small number of approved people
+- [ ] Outline the staged architecture needed to support the first real recorded METIS session with durable context, retrieval, and governance
