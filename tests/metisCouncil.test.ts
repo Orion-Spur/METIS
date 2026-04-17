@@ -2,6 +2,8 @@ import type { CouncilContextEntry } from "@/lib/metisCouncil";
 
 const originalEnv = { ...process.env };
 
+const getCompanyProfile = vi.fn();
+
 async function loadCouncilModule() {
   vi.resetModules();
   return import("@/lib/metisCouncil");
@@ -144,6 +146,10 @@ function createFetchMock() {
   });
 }
 
+vi.mock("@/lib/db", () => ({
+  getCompanyProfile,
+}));
+
 describe("METIS council orchestration", () => {
   beforeEach(() => {
     process.env.JWT_SECRET = "1234567890abcdef1234567890abcdef";
@@ -153,10 +159,26 @@ describe("METIS council orchestration", () => {
     process.env.AZUREGPT54_DEPLOYMENT = "gpt-55";
     process.env.GEMINI_API_KEY = "gemini-test";
     process.env.XAI_API_KEY = "xai-test";
+    getCompanyProfile.mockResolvedValue({
+      id: 1,
+      slug: "default",
+      name: "Calling All Minds",
+      mission: "Build decision systems that help teams reason clearly.",
+      products: "METIS multi-agent council and related operating tools.",
+      customers: "Leadership teams and operating stakeholders.",
+      constraints: "Stay lean, keep runtime cost disciplined, and prioritise trustworthy memory.",
+      teamSize: 6,
+      stage: "Operating build phase",
+      operatingModel: "Small product team with direct founder involvement.",
+      geography: "UK",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   });
 
   afterEach(() => {
     process.env = { ...originalEnv };
+    getCompanyProfile.mockReset();
     vi.restoreAllMocks();
   });
 
@@ -207,6 +229,22 @@ describe("METIS council orchestration", () => {
     expect(events.slice(0, 8).every((event) => event.kind === "discussion")).toBe(true);
     expect(events.at(-1)).toEqual({ kind: "synthesis", agentName: "Metis" });
     expect(result.synthesis?.sequenceOrder).toBe(9);
+  });
+
+  it("injects company context into the council prompt assembly", async () => {
+    const fetchMock = createFetchMock();
+
+    vi.stubGlobal("fetch", fetchMock);
+    const council = await loadCouncilModule();
+    await council.streamCouncilTurn({
+      sessionId: "session-company",
+      userMessage: "Debate the first operating architecture for METIS.",
+    });
+
+    const anthropicCallBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}"));
+    expect(anthropicCallBody.messages[0].content).toContain("Company context:");
+    expect(anthropicCallBody.messages[0].content).toContain("Calling All Minds");
+    expect(anthropicCallBody.messages[0].content).toContain("trustworthy memory");
   });
 
   it("reuses live Orion interjection context when the discussion is resumed mid-stream", async () => {

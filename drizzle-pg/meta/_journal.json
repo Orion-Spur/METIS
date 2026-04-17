@@ -8,6 +8,13 @@
       "when": 1776376806046,
       "tag": "0000_regular_tana_nile",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776410927280,
+      "tag": "0001_romantic_wraith",
+      "breakpoints": true
     }
   ]
 }

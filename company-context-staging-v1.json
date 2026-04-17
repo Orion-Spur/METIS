@@ -1,0 +1,69 @@
+{
+  "profile": {
+    "slug": "default",
+    "name": "Calling All Minds",
+    "mission": "To unlock human potential by making systems, workplaces, and learning environments accessible, inclusive, and effective for everyone.",
+    "products": "AXS Passport (workplace adjustments management), AXS Audit (accessibility assessment and AI-guided remediation), and AXS Toolbar (AI-powered accessibility interface layer).",
+    "customers": "Large employers and corporates, universities and higher education institutions, public sector organisations, and organisations within the Disability Confident scheme.",
+    "constraints": "Time is limited, cost matters, solutions must be practical and implementable, and unnecessary complexity should be avoided.",
+    "teamSize": null,
+    "stage": "Mission-led but commercially driven organisation building scalable accessibility systems.",
+    "operatingModel": "Combines consultancy, training, and technology products to help organisations move from intention to implementation through practical systems rather than one-off interventions.",
+    "geography": "UK-based"
+  },
+  "founder_context": {
+    "name": "Suraj Sharma",
+    "alias": "Orion",
+    "role": "Founder of Calling All Minds and primary decision-maker across strategy, product direction, and commercial approach.",
+    "background": "Entrepreneur with experience building and operating businesses, focused on execution and outcomes.",
+    "operating_style": "Decisive, outcome-focused, high-standard, iterative, and direct.",
+    "expectations_from_metis": "Avoid generic or surface-level output; challenge assumptions when appropriate; provide clear structured thinking; offer recommendations rather than just options; remain commercially aware.",
+    "decision_bias": "Optimise for clarity and execution, avoid over-engineering, focus on what will work in practice, and assume decisions will be made and executed quickly."
+  },
+  "company_detail": {
+    "overview": "Calling All Minds is a UK-based organisation focused on improving accessibility, inclusion, and support for disabled and neurodivergent individuals across education, employment, and public services.",
+    "core_problem": "Organisations want to be inclusive and face legal and reputational pressure, but often lack clarity, tools, and execution capability, leading to inconsistent adjustments, poor accessibility implementation, compliance risk, and frustration.",
+    "approach": "Provide practical solutions, combining technology and services into structured systems that make adjustments easier to request and implement, make accessibility measurable, and reduce organisational friction.",
+    "differentiation": "Combines technology with human expertise, focuses on execution rather than theory, builds systems rather than one-off interventions, and is rooted in real lived experience of disability and neurodiversity.",
+    "tone": "Practical, credible, outcome-focused, not overly corporate, and focused on real-world impact.",
+    "market_context": "Increasing pressure from Equality Act obligations, the European Accessibility Act, WCAG-related accessibility regulation, ESG and DEI expectations, and reputational risk meets a market where most organisations lack coherent systems and execution is inconsistent."
+  },
+  "products": [
+    {
+      "name": "AXS Passport",
+      "summary": "System for managing workplace adjustments, employee requests, organisational tracking, fulfilment, reporting, and consistency.",
+      "primary_value": "Reduces admin burden, improves employee experience, and supports compliance.",
+      "usp": "Comprehensive tool with AI-assisted guidance for creating adjustment requests, a secure document vault, and analytics for organisational decision-making and implementation."
+    },
+    {
+      "name": "AXS Audit",
+      "summary": "Accessibility assessment tool that identifies issues across digital platforms, highlights WCAG-related risks, and provides actionable insights.",
+      "primary_value": "Reveals real accessibility gaps and supports compliance and improvement.",
+      "usp": "Includes COGA and cognitive accessibility scoring, uses AI vision and LLM models to scan reliably across roughly 80% of WCAG 2.2 regulations, and offers Orion for code-level fixes and chat support."
+    },
+    {
+      "name": "AXS Toolbar",
+      "summary": "Accessibility interface layer with simplification, summarisation, and visual-adjustment tools designed for cognitive accessibility.",
+      "primary_value": "Improves usability for end users and enhances accessibility without major rebuilds.",
+      "usp": "AI-powered tools such as page summarisation, text simplification, voice navigation, image description, plus full admin customisation for features and design."
+    }
+  ],
+  "services": [
+    "Assistive technology training",
+    "Consultancy for accessibility and inclusion",
+    "Non-Medical Help support in education",
+    "Organisational onboarding and implementation support"
+  ],
+  "session_bootstrap": {
+    "opening_session_goal": "Design the optimal v1 architecture for Metis as an internal multi-agent intelligence system that initially supports sales and later expands into innovation, product design, automation, app creation, and broader business decision-making.",
+    "design_objectives": "Maximise output quality, minimise cost and latency, avoid unnecessary agents and duplicated roles, prioritise simplicity and clarity, and scale beyond sales into a general-purpose system.",
+    "constraints": "Cost matters, speed matters, the system should not require excessive agents per task, multiple roles should not be assigned to the same model without justification, and implementation must remain practical.",
+    "deliberation_rule": "Do not converge too early; challenge assumptions, disagree where necessary, and improve each other's thinking because the goal is the best possible architecture rather than agreement."
+  },
+  "open_questions_for_orion": [
+    "What company team size should be stored?",
+    "Should the company profile include explicit commercial targets, pricing posture, or revenue priorities?",
+    "Should cross-session learning reference all past sessions or only manually approved insights?",
+    "Should founder context be injected into every session verbatim or through a compressed advisory summary?"
+  ]
+}

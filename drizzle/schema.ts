@@ -36,6 +36,22 @@ export const users = pgTable("users", {
   lastSignedIn: timestamp("lastSignedIn", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
+export const companyProfiles = pgTable("companyProfiles", {
+  id: serial("id").primaryKey(),
+  slug: varchar("slug", { length: 64 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  mission: text("mission").notNull(),
+  products: text("products").notNull(),
+  customers: text("customers"),
+  constraints: text("constraints"),
+  teamSize: integer("teamSize"),
+  stage: varchar("stage", { length: 128 }),
+  operatingModel: text("operatingModel"),
+  geography: text("geography"),
+  createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+});
+
 export const councilSessions = pgTable(
   "councilSessions",
   {
@@ -76,6 +92,9 @@ export const councilMessages = pgTable(
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+export type CompanyProfile = typeof companyProfiles.$inferSelect;
+export type InsertCompanyProfile = typeof companyProfiles.$inferInsert;
 
 export type CouncilSession = typeof councilSessions.$inferSelect;
 export type InsertCouncilSession = typeof councilSessions.$inferInsert;

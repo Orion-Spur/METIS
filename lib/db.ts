@@ -2,7 +2,12 @@ import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { nanoid } from "nanoid";
 import postgres from "postgres";
-import { councilMessages, councilSessions, users } from "@/drizzle/schema";
+import {
+  companyProfiles,
+  councilMessages,
+  councilSessions,
+  users,
+} from "@/drizzle/schema";
 import { ENV } from "@/lib/env";
 import type { MetisCouncilMessage, MetisCouncilTurn } from "@/shared/metis";
 
@@ -19,6 +24,7 @@ function createDb() {
   return drizzle(client, {
     schema: {
       users,
+      companyProfiles,
       councilSessions,
       councilMessages,
     },
@@ -183,6 +189,68 @@ export async function recordSuccessfulLogin(userId: number) {
       loginMethod: "password",
     })
     .where(eq(users.id, userId));
+}
+
+export async function getCompanyProfile(slug = "default") {
+  const db = getDb();
+  const result = await db
+    .select()
+    .from(companyProfiles)
+    .where(eq(companyProfiles.slug, slug))
+    .limit(1);
+
+  return result[0] ?? null;
+}
+
+export async function upsertCompanyProfile(input: {
+  slug?: string;
+  name: string;
+  mission: string;
+  products: string;
+  customers?: string | null;
+  constraints?: string | null;
+  teamSize?: number | null;
+  stage?: string | null;
+  operatingModel?: string | null;
+  geography?: string | null;
+}) {
+  const db = getDb();
+  const now = new Date();
+  const slug = input.slug?.trim() || "default";
+
+  await db
+    .insert(companyProfiles)
+    .values({
+      slug,
+      name: input.name,
+      mission: input.mission,
+      products: input.products,
+      customers: input.customers ?? null,
+      constraints: input.constraints ?? null,
+      teamSize: input.teamSize ?? null,
+      stage: input.stage ?? null,
+      operatingModel: input.operatingModel ?? null,
+      geography: input.geography ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: companyProfiles.slug,
+      set: {
+        name: input.name,
+        mission: input.mission,
+        products: input.products,
+        customers: input.customers ?? null,
+        constraints: input.constraints ?? null,
+        teamSize: input.teamSize ?? null,
+        stage: input.stage ?? null,
+        operatingModel: input.operatingModel ?? null,
+        geography: input.geography ?? null,
+        updatedAt: now,
+      },
+    });
+
+  return getCompanyProfile(slug);
 }
 
 export async function listCouncilTurns(sessionId: string, userId?: number) {
