@@ -1,4 +1,4 @@
-import type { CouncilContextEntry } from "@/lib/metisCouncil";
+import type { CouncilContextEntry, MetisAgentOutput } from "@/lib/metisCouncil";
 
 const originalEnv = { ...process.env };
 
@@ -9,69 +9,144 @@ async function loadCouncilModule() {
   return import("@/lib/metisCouncil");
 }
 
+function createStructuredResponse(
+  agentName: string,
+  position: string,
+  keyReasoning: string[],
+  challenge: string,
+  recommendedAction: MetisAgentOutput["recommendedAction"],
+  confidence: number,
+  summaryRationale: string,
+) {
+  return {
+    position,
+    keyReasoning,
+    challenge,
+    recommendedAction,
+    confidence,
+    summaryRationale,
+  };
+}
+
 function createResponseQueue() {
   return {
     anthropicResponses: [
-      {
-        content: "Metis opens the meeting by naming the core product tension.",
-        confidence: 0.84,
-        recommendedAction: "proceed",
-        summaryRationale: "A chaired opening gives the specialists a shared frame.",
-      },
-      {
-        content: "Metis identifies the unresolved tension and requests sharper closing positions.",
-        confidence: 0.83,
-        recommendedAction: "revise",
-        summaryRationale: "The midpoint intervention keeps the discussion adversarial.",
-      },
-      {
-        content: "Metis closes with a synthesized recommendation after the debate.",
-        confidence: 0.9,
-        recommendedAction: "proceed",
-        summaryRationale: "The specialists now provide enough material for a decisive close.",
-      },
+      createStructuredResponse(
+        "Metis",
+        "The first decision is how much launch complexity Orion should accept at day one.",
+        [
+          "We need a live frame before specialist disagreement begins.",
+          "The initial decision should stay provisional.",
+        ],
+        "If we settle too early, Loki has no leverage to expose delivery risk.",
+        "proceed",
+        0.84,
+        "The chair opens with a clear but non-final frame.",
+      ),
+      createStructuredResponse(
+        "Metis",
+        "The debate now turns on whether a phased launch is disciplined enough under scrutiny.",
+        [
+          "Athena offers structure but Argus still wants evidence.",
+          "Loki has exposed execution fragility.",
+          "The room still needs one sharper closing challenge.",
+        ],
+        "No decision is credible yet if the strongest commercial objection remains unresolved.",
+        "revise",
+        0.83,
+        "The chair keeps pressure on the room instead of closing.",
+      ),
+      createStructuredResponse(
+        "Metis",
+        "Proceed with a phased launch, but only with explicit instrumentation and narrow scope.",
+        [
+          "Athena's path is usable once evidence gates are added.",
+          "Argus gets measurable checkpoints before expansion.",
+          "Loki's risk warning is contained by narrowing the first release.",
+        ],
+        "If instrumentation slips, the council should escalate the next decision to Orion.",
+        "proceed",
+        0.9,
+        "The final recommendation preserves the strongest surviving risk.",
+      ),
     ],
     azureResponses: [
-      {
-        content: "Athena proposes a phased launch with explicit sequencing.",
-        confidence: 0.82,
-        recommendedAction: "proceed",
-        summaryRationale: "A phased path balances ambition and control.",
-      },
-      {
-        content: "Athena tightens the rollout after Argus and Loki raise objections.",
-        confidence: 0.79,
-        recommendedAction: "revise",
-        summaryRationale: "The plan improves once the critique is absorbed.",
-      },
+      createStructuredResponse(
+        "Athena",
+        "Use a phased launch with a tightly sequenced first release.",
+        [
+          "A narrow first step reduces operational drag.",
+          "Sequencing keeps Orion informed without constant escalation.",
+        ],
+        "Argus is right that we still need explicit success thresholds.",
+        "proceed",
+        0.82,
+        "A phased path balances ambition and control.",
+      ),
+      createStructuredResponse(
+        "Athena",
+        "Keep the phased launch, but add explicit gates before each expansion step.",
+        [
+          "The first release should prove usage before scale.",
+          "Risk falls when checkpoints are pre-committed.",
+        ],
+        "Loki is right that vague sequencing invites performative progress.",
+        "revise",
+        0.79,
+        "The plan improves after absorbing criticism.",
+      ),
     ],
     geminiResponses: [
-      {
-        content: "Argus identifies missing evidence thresholds and validation criteria.",
-        confidence: 0.74,
-        recommendedAction: "revise",
-        summaryRationale: "The architecture still needs measurable checkpoints.",
-      },
-      {
-        content: "Argus says the revised path is acceptable only if the next experiment is instrumented.",
-        confidence: 0.76,
-        recommendedAction: "proceed",
-        summaryRationale: "The evidence gap is smaller but not gone.",
-      },
+      createStructuredResponse(
+        "Argus",
+        "I can support the direction only if evidence thresholds are named now.",
+        [
+          "The current path lacks measurable acceptance criteria.",
+          "A launch without instrumentation weakens later judgment.",
+        ],
+        "Athena's sequencing is useful, but it remains under-specified.",
+        "revise",
+        0.74,
+        "The architecture still needs measurable checkpoints.",
+      ),
+      createStructuredResponse(
+        "Argus",
+        "The revised path is acceptable if the first release is instrumented and reviewed quickly.",
+        [
+          "Evidence gates now exist at the right points.",
+          "The decision remains reversible after the first release.",
+        ],
+        "If the team skips the review gate, the whole discipline collapses.",
+        "proceed",
+        0.76,
+        "The evidence gap is smaller but not gone.",
+      ),
     ],
     xaiResponses: [
-      {
-        content: "Loki flags orchestration complexity and timeout risk in the initial plan.",
-        confidence: 0.77,
-        recommendedAction: "revise",
-        summaryRationale: "The first strategy underestimates delivery risk.",
-      },
-      {
-        content: "Loki says the revised plan is better but still vulnerable to performative consensus.",
-        confidence: 0.81,
-        recommendedAction: "revise",
-        summaryRationale: "The final stress test preserves useful disagreement.",
-      },
+      createStructuredResponse(
+        "Loki",
+        "The initial plan is too comfortable and assumes complexity will behave itself.",
+        [
+          "More orchestration means more ways to stall delivery.",
+          "A soft launch story can hide lack of focus.",
+        ],
+        "Athena is still underestimating how easily scope can bloat.",
+        "revise",
+        0.77,
+        "The first strategy underestimates delivery risk.",
+      ),
+      createStructuredResponse(
+        "Loki",
+        "The revised path is better, but it still fails if the team treats phase one as symbolic.",
+        [
+          "A narrow release must stay genuinely narrow.",
+          "Instrumentation must drive action, not optics.",
+        ],
+        "Metis should not converge unless this risk is carried into the final recommendation.",
+        "revise",
+        0.81,
+        "The final stress test preserves useful disagreement.",
+      ),
     ],
   };
 }
@@ -79,7 +154,7 @@ function createResponseQueue() {
 function createFetchMock() {
   const queues = createResponseQueue();
 
-  return vi.fn(async (url: string, init?: RequestInit) => {
+  return vi.fn(async (url: string) => {
     if (url.includes("azure.example.com")) {
       const response = queues.azureResponses.shift();
       return {
@@ -141,6 +216,60 @@ function createFetchMock() {
             text: JSON.stringify(response),
           },
         ],
+      }),
+    };
+  });
+}
+
+function createVerboseFetchMock() {
+  const longPosition = Array.from({ length: 70 }, (_, index) => `position${index + 1}`).join(" ");
+  const longReasoning = Array.from({ length: 6 }, (_, bulletIndex) =>
+    Array.from({ length: 28 }, (_, wordIndex) => `reason${bulletIndex + 1}_${wordIndex + 1}`).join(" "),
+  );
+  const longChallenge = Array.from({ length: 28 }, (_, index) => `challenge${index + 1}`).join(" ");
+  const longSummary = Array.from({ length: 25 }, (_, index) => `summary${index + 1}`).join(" ");
+
+  return vi.fn(async (url: string) => {
+    const response = {
+      position: longPosition,
+      keyReasoning: longReasoning,
+      challenge: longChallenge,
+      recommendedAction: "revise",
+      confidence: 0.88,
+      summaryRationale: longSummary,
+    };
+
+    if (url.includes("azure.example.com")) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify(response) } }],
+        }),
+      };
+    }
+
+    if (url.includes("generativelanguage.googleapis.com")) {
+      return {
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: JSON.stringify(response) }] } }],
+        }),
+      };
+    }
+
+    if (url.includes("api.x.ai")) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify(response) } }],
+        }),
+      };
+    }
+
+    return {
+      ok: true,
+      json: async () => ({
+        content: [{ text: JSON.stringify(response) }],
       }),
     };
   });
@@ -210,6 +339,74 @@ describe("METIS council orchestration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(9);
   });
 
+  it("formats every council turn into compact position, reasoning, and challenge sections", async () => {
+    const fetchMock = createFetchMock();
+
+    vi.stubGlobal("fetch", fetchMock);
+    const council = await loadCouncilModule();
+    const turn = await council.orchestrateCouncilTurn({
+      sessionId: "session-compact",
+      userMessage: "Decide the right launch shape for METIS.",
+    });
+
+    for (const message of [...turn.discussion, turn.synthesis]) {
+      expect(message.content).toContain("Position\n");
+      expect(message.content).toContain("\n\nKey reasoning\n");
+      expect(message.content).toContain("\n\nChallenge\n-");
+      const reasoningLines = message.content
+        .split("\n")
+        .filter((line) => line.startsWith("- "));
+      expect(reasoningLines.length).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it("enforces compact runtime limits even when a provider returns overlong structured output", async () => {
+    const fetchMock = createVerboseFetchMock();
+
+    vi.stubGlobal("fetch", fetchMock);
+    const council = await loadCouncilModule();
+    const turn = await council.orchestrateCouncilTurn({
+      sessionId: "session-overlong",
+      userMessage: "Prove the runtime truncation path works even when providers overshare.",
+    });
+
+    const firstDiscussionLines = turn.discussion[0].content.split("\n");
+    const discussionPositionWords = firstDiscussionLines[1].split(" ").filter(Boolean);
+    const discussionReasoningLines = firstDiscussionLines.filter((line) => line.startsWith("- "));
+    const discussionChallengeWords = String(discussionReasoningLines.at(-1)).replace(/^-\s*/, "").split(" ").filter(Boolean);
+
+    expect(discussionPositionWords.length).toBeLessThanOrEqual(45);
+    expect(discussionReasoningLines.length).toBeLessThanOrEqual(4);
+    expect(discussionChallengeWords.length).toBeLessThanOrEqual(18);
+    expect(turn.discussion[0].summaryRationale.split(" ").filter(Boolean).length).toBeLessThanOrEqual(20);
+    expect(turn.synthesis.content.split("\n").filter((line) => line.startsWith("- ")).length).toBeLessThanOrEqual(5);
+  });
+
+  it("requires the full council challenge round before the chair can converge", async () => {
+    const fetchMock = createFetchMock();
+
+    vi.stubGlobal("fetch", fetchMock);
+    const council = await loadCouncilModule();
+    const turn = await council.orchestrateCouncilTurn({
+      sessionId: "session-challenge",
+      userMessage: "Stress test whether the council converges too early.",
+    });
+
+    expect(council.getCouncilRoundState(turn.discussion)).toEqual({
+      openingRoundComplete: true,
+      challengeRoundComplete: true,
+    });
+    expect(council.hasRequiredChallengeRound(turn.discussion.slice(0, 4))).toBe(false);
+    expect(council.hasRequiredChallengeRound(turn.discussion)).toBe(true);
+    expect(turn.discussion.at(-1)?.agentName).toBe("Loki");
+    expect(turn.synthesis.content).toContain("If instrumentation slips, the council should escalate the next decision to Orion.");
+
+    const synthesisPromptBody = JSON.parse(String(fetchMock.mock.calls[8]?.[1]?.body ?? "{}"));
+    expect(synthesisPromptBody.messages[0].content).toContain(
+      "You may converge now only because the required challenge round has occurred.",
+    );
+  });
+
   it("emits each council contribution incrementally before the final synthesis", async () => {
     const fetchMock = createFetchMock();
     const events: Array<{ kind: string; agentName: string }> = [];
@@ -259,7 +456,7 @@ describe("METIS council orchestration", () => {
       {
         role: "agent",
         speakerName: "Metis",
-        content: "Understood. I will keep the council focused on the current crux.",
+        content: "Position\nUnderstood. I will keep the council focused on the current crux.\n\nKey reasoning\n- The live constraint is now part of the frame.\n\nChallenge\n- If we forget the current state, the discussion resets unnecessarily.",
         sequenceOrder: 2,
         confidence: 0.84,
         recommendedAction: "proceed",
