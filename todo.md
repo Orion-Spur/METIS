@@ -80,3 +80,6 @@
 - [x] Fix the council composer submit control so live streaming starts reliably without accidental page navigation during browser use
 - [ ] Re-run browser verification after the submit regression fix and confirm streaming plus Orion interjection work end to end
 - [x] Fix the council streaming route so aborted readers do not attempt to enqueue after the NDJSON controller has been closed
+- [ ] Push the latest METIS real-time council changes to the GitHub repository so Vercel can deploy them
+- [ ] Verify the Vercel deployment receives the new METIS streaming council update
+- [ ] Validate real-time chat and Orion interjection behavior on the live production site after the deployment updates
