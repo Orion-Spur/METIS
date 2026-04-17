@@ -117,6 +117,9 @@
 - [ ] Add a focused test that simulates aborted or closed council streams and proves the route does not attempt to enqueue or close after shutdown
 - [ ] Reproduce an aborted council stream after the route fix and confirm the logs no longer show `Controller is already closed`
 - [x] Enforce a mandatory council response format with Position, Key reasoning, and Challenge sections for every agent turn
+- [x] Refine council formatting to use natural bullet flow without rigid section headers
+- [x] Update agent colors: Argus to purple, Loki to green
+- [x] Refine agent prompts with tighter behavioral directives (Argus: numbers/thresholds, Loki: name consequences, Metis: force outcomes)
 - [x] Cap council turns so agents respond concisely instead of producing long essay-style outputs
 - [x] Prevent Metis from converging before at least one full challenge round has occurred
 - [x] Require Loki to issue an explicit challenge before Metis can finalize convergence
