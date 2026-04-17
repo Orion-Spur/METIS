@@ -3,6 +3,7 @@ const appendCouncilMessage = vi.fn();
 const listCouncilTurns = vi.fn();
 const startCouncilSessionTurn = vi.fn();
 const streamCouncilTurn = vi.fn();
+const flattenTurnsToContextEntries = vi.fn();
 
 vi.mock("@/lib/auth", () => ({
   getCurrentSession,
@@ -15,6 +16,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/lib/metisCouncil", () => ({
+  flattenTurnsToContextEntries,
   streamCouncilTurn,
 }));
 
@@ -30,19 +32,70 @@ describe("METIS streaming council route", () => {
     listCouncilTurns.mockReset();
     startCouncilSessionTurn.mockReset();
     streamCouncilTurn.mockReset();
+    flattenTurnsToContextEntries.mockReset();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("returns newline-delimited streaming events and passes live context into the council stream", async () => {
+  it("returns newline-delimited streaming events and prefers persisted session memory over client live context", async () => {
     getCurrentSession.mockResolvedValue({
       userId: 7,
       username: "orion",
       role: "admin",
     });
-    listCouncilTurns.mockResolvedValue([]);
+    listCouncilTurns.mockResolvedValue([
+      {
+        sessionId: "session-live",
+        userMessage: "Earlier Orion brief.",
+        discussion: [
+          {
+            agentName: "Metis",
+            content: "Metis framed the earlier discussion.",
+            sequenceOrder: 2,
+            confidence: 0.76,
+            recommendedAction: "proceed",
+            summaryRationale: "The chair opened the first turn.",
+          },
+        ],
+        synthesis: {
+          agentName: "Metis",
+          content: "Metis closed the earlier turn.",
+          sequenceOrder: 3,
+          confidence: 0.8,
+          recommendedAction: "revise",
+          summaryRationale: "The earlier turn concluded with a refinement.",
+        },
+        createdAt: Date.now(),
+      },
+    ]);
+    flattenTurnsToContextEntries.mockReturnValue([
+      {
+        role: "user",
+        speakerName: "Orion",
+        content: "Earlier Orion brief.",
+        sequenceOrder: 1,
+      },
+      {
+        role: "agent",
+        speakerName: "Metis",
+        content: "Metis framed the earlier discussion.",
+        sequenceOrder: 2,
+        confidence: 0.76,
+        recommendedAction: "proceed",
+        summaryRationale: "The chair opened the first turn.",
+      },
+      {
+        role: "synthesis",
+        speakerName: "Metis",
+        content: "Metis closed the earlier turn.",
+        sequenceOrder: 3,
+        confidence: 0.8,
+        recommendedAction: "revise",
+        summaryRationale: "The earlier turn concluded with a refinement.",
+      },
+    ]);
     startCouncilSessionTurn.mockResolvedValue({
       sessionId: "session-live",
       sequenceOrder: 1,
@@ -56,8 +109,26 @@ describe("METIS streaming council route", () => {
         {
           role: "user",
           speakerName: "Orion",
-          content: "Previous visible Orion note.",
-          sequenceOrder: 4,
+          content: "Earlier Orion brief.",
+          sequenceOrder: 1,
+        },
+        {
+          role: "agent",
+          speakerName: "Metis",
+          content: "Metis framed the earlier discussion.",
+          sequenceOrder: 2,
+          confidence: 0.76,
+          recommendedAction: "proceed",
+          summaryRationale: "The chair opened the first turn.",
+        },
+        {
+          role: "synthesis",
+          speakerName: "Metis",
+          content: "Metis closed the earlier turn.",
+          sequenceOrder: 3,
+          confidence: 0.8,
+          recommendedAction: "revise",
+          summaryRationale: "The earlier turn concluded with a refinement.",
         },
       ]);
 
@@ -153,5 +224,92 @@ describe("METIS streaming council route", () => {
       sessionId: "session-live",
       completed: true,
     });
+  });
+
+  it("does not enqueue a council message after the request is aborted while persistence is still in flight", async () => {
+    vi.useFakeTimers();
+
+    getCurrentSession.mockResolvedValue({
+      userId: 7,
+      username: "orion",
+      role: "admin",
+    });
+    listCouncilTurns.mockResolvedValue([]);
+    flattenTurnsToContextEntries.mockReturnValue([]);
+    startCouncilSessionTurn.mockResolvedValue({
+      sessionId: "session-abort",
+      sequenceOrder: 1,
+    });
+
+    let resolvePersist: ((value: { sequenceOrder: number }) => void) | undefined;
+    appendCouncilMessage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePersist = resolve;
+        }),
+    );
+
+    const abortController = new AbortController();
+
+    streamCouncilTurn.mockImplementation(async ({ onEvent }) => {
+      const eventPromise = onEvent({
+        kind: "discussion",
+        message: {
+          agentName: "Metis",
+          content: "This message should never be enqueued after abort.",
+          sequenceOrder: 1,
+          confidence: 0.7,
+          recommendedAction: "proceed",
+          summaryRationale: "Abort should suppress the outbound event.",
+        },
+      });
+
+      abortController.abort();
+      resolvePersist?.({ sequenceOrder: 2 });
+      await eventPromise;
+
+      return {
+        sessionId: "session-abort",
+        userMessage: "Abort this stream.",
+        discussion: [],
+        synthesis: null,
+        createdAt: Date.now(),
+        completed: false,
+      };
+    });
+
+    const route = await loadRouteModule();
+    const response = await route.POST(
+      new Request("http://localhost/api/council", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId: "session-abort",
+          message: "Abort this stream.",
+        }),
+        signal: abortController.signal,
+      }),
+    );
+
+    await vi.runAllTimersAsync();
+
+    const lines = (await response.text())
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+
+    expect(appendCouncilMessage).toHaveBeenCalledTimes(1);
+    expect(lines).toEqual([
+      {
+        type: "start",
+        sessionId: "session-abort",
+        userMessage: "Abort this stream.",
+      },
+    ]);
+
+    vi.useRealTimers();
   });
 });

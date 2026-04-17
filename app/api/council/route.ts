@@ -5,7 +5,7 @@ import {
   listCouncilTurns,
   startCouncilSessionTurn,
 } from "@/lib/db";
-import { streamCouncilTurn } from "@/lib/metisCouncil";
+import { flattenTurnsToContextEntries, streamCouncilTurn } from "@/lib/metisCouncil";
 
 const encoder = new TextEncoder();
 
@@ -46,9 +46,8 @@ export async function POST(request: Request) {
 
   try {
     const body = requestSchema.parse(await request.json());
-    const history = !body.liveContext && body.sessionId
-      ? await listCouncilTurns(body.sessionId, session.userId)
-      : [];
+    const history = body.sessionId ? await listCouncilTurns(body.sessionId, session.userId) : [];
+    const authoritativeHistoryEntries = history.length > 0 ? flattenTurnsToContextEntries(history) : undefined;
     const started = await startCouncilSessionTurn({
       sessionId: body.sessionId,
       userId: session.userId,
@@ -101,10 +100,10 @@ export async function POST(request: Request) {
               sessionId: started.sessionId,
               userMessage: body.message,
               history,
-              historyEntries: body.liveContext,
-              shouldStop: () => request.signal.aborted,
+              historyEntries: authoritativeHistoryEntries ?? body.liveContext,
+              shouldStop: () => request.signal.aborted || closed,
               onEvent: async (event) => {
-                if (request.signal.aborted) {
+                if (request.signal.aborted || closed) {
                   return;
                 }
 
@@ -113,6 +112,10 @@ export async function POST(request: Request) {
                   role: event.kind === "discussion" ? "agent" : "synthesis",
                   message: event.message,
                 });
+
+                if (request.signal.aborted || closed) {
+                  return;
+                }
 
                 enqueue({
                   type: "message",

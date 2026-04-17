@@ -83,12 +83,36 @@
 - [x] Push the latest METIS real-time council changes to the GitHub repository so Vercel can deploy them
 - [x] Verify the Vercel deployment receives the new METIS streaming council update
 - [x] Validate real-time chat and Orion interjection behavior on the live production site after the deployment updates
-- [ ] Investigate and fix the production interjection flow so the live session remains in the expected active state after Orion redirects mid-discussion, then re-verify it end to end
-- [ ] Redesign the homepage/login so the full entry experience fits on one non-scrolling black-background screen
-- [ ] Identify and document the current METIS agent prompt file locations for Orion
-- [ ] Design and implement a company profile data model in Postgres so products, mission, constraints, team size, and related business context can be injected into every council agent prompt
-- [ ] Design and implement session memory so agents can reliably read and build on current-session conversation history
+- [x] Investigate and fix the production interjection flow so the live session remains in the expected active state after Orion redirects mid-discussion, then re-verify it end to end
+- [x] Redesign the homepage/login so the full entry experience fits on one non-scrolling black-background screen
+- [x] Identify and document the current METIS agent prompt file locations for Orion
+- [x] Design and implement a company profile data model in Postgres so products, mission, constraints, team size, and related business context can be injected into every council agent prompt
+- [x] Design and implement session memory so agents can reliably read and build on current-session conversation history
 - [ ] Design cross-session learning so prior session insights can be referenced deliberately and safely in later council sessions
 - [ ] Add history browsing and chat search capabilities inside the authenticated METIS experience
 - [ ] Add limited-user administration so Orion can grant or revoke access for a small number of approved people
-- [ ] Outline the staged architecture needed to support the first real recorded METIS session with durable context, retrieval, and governance
+- [x] Outline the staged architecture needed to support the first real recorded METIS session with durable context, retrieval, and governance
+- [x] Implement company profile storage and prompt injection as the first foundation for real recorded METIS sessions
+- [x] Strengthen authoritative session memory so each model call is grounded in persisted transcript context rather than only live client state
+- [x] Add focused tests for company-context injection and session-memory continuity before building broader retrieval features
+- [ ] After that foundation lands, implement history/search, lightweight user administration, and cross-session learning in that order
+- [x] Restore the homepage to match the original reference composition closely, keeping the centered image-first login layout and removing the unintended extra copy
+- [x] Limit the homepage changes to the requested black background and one-screen fit without redesigning the original visual hierarchy
+- [x] Pause company profile content writing until Orion provides the actual business context to store and inject
+- [x] Push the corrected restored homepage to the live site so production matches the approved reference composition
+- [x] Verify the live homepage visually after deployment to confirm the restored composition is actually in production
+- [x] Keep company profile content population paused until Orion provides the actual business context from the knowledge documents
+- [x] Normalize the uploaded founder, company, and opening-session documents into a structured METIS company-context dataset
+- [x] Persist the approved company context in Postgres so council prompts can be grounded in durable business context
+- [x] Wire authoritative company context and persisted session transcript memory into the council route and orchestration
+- [x] Add focused tests for company-context prompt injection and session-memory continuity
+- [x] Confirm the prompt review locations for Orion while preparing the next implementation step
+- [x] Fix the remaining streaming controller closed-state error in the council route and verify logs stay clean during aborted or closed sessions
+- [x] Mark the exact company-context and session-memory continuity test-tracking item complete only after the focused validation is fully confirmed
+- [x] Review whether the current prompt line about not introducing fixed roles is still useful or should be simplified
+- [x] Refine Metis so the chair participates actively in ideation rather than only moderating turn flow
+- [x] Reassess whether the explicit line that the council is answerable to Orion should remain in every agent prompt or be softened
+- [x] Produce a cleaner prompt set for Athena, Argus, Loki, Metis-as-chair, and Metis synthesis
+- [x] Ensure Athena, Argus, and Loki are described only through capabilities and behaviour, without any fixed role or title, while Metis remains the only explicitly titled chair
+- [ ] Add a focused test that simulates aborted or closed council streams and proves the route does not attempt to enqueue or close after shutdown
+- [ ] Reproduce an aborted council stream after the route fix and confirm the logs no longer show `Controller is already closed`

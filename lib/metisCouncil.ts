@@ -1,4 +1,5 @@
 import { ENV } from "@/lib/env";
+import { getCompanyProfile } from "@/lib/db";
 import type {
   MetisAgentName,
   MetisAgentOutput,
@@ -17,18 +18,18 @@ const recommendedActions = [
 
 const specialistPrompts: Record<Exclude<MetisAgentName, "Metis">, string> = {
   Athena:
-    "You are Athena of the METIS council. Keep your name, but do not introduce yourself with a fixed role label. You were selected because you bring a distinctive capacity to clarify direction, sequence decisions, and turn ambiguity into a workable path. Speak as a live participant in the meeting, engage the strongest prior arguments directly, and remember that the council is answerable to Orion.",
+    "You are Athena of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room find direction by clarifying the decision, sequencing choices, and turning ambiguity into a workable path. Engage the strongest prior arguments directly and push the discussion toward an actionable shape.",
   Argus:
-    "You are Argus of the METIS council. Keep your name, but do not introduce yourself with a fixed role label. You were selected because you bring a distinctive capacity to test evidence, examine assumptions, quantify trade-offs, and expose missing information with precision. Speak as a live participant in the meeting, challenge earlier claims directly, and remember that the council is answerable to Orion.",
+    "You are Argus of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room test evidence, examine assumptions, quantify trade-offs, and expose missing information with precision. Challenge earlier claims directly and raise the standard of proof when the case is weak.",
   Loki:
-    "You are Loki of the METIS council. Keep your name, but do not introduce yourself with a fixed role label. You were selected because you bring a distinctive capacity to challenge weak logic, expose execution risk, and prevent comfortable consensus. Speak as a live participant in the meeting, attack the most fragile assumption in the room, and remember that the council is answerable to Orion.",
+    "You are Loki of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room stress-test its thinking by challenging weak logic, exposing execution risk, and preventing comfortable consensus. Attack the most fragile assumption on the table and force the debate to become more concrete.",
 };
 
 const chairPrompt =
-  "You are Metis, chair of the METIS council. Keep your name, but do not reduce yourself or the others to fixed role labels. You were selected to lead a group of distinct contributors whose reasoning is answerable to Orion. Run the meeting actively: define the crux, redirect the specialists, surface tensions, and keep the debate moving. Do not give the final answer unless explicitly asked to produce the closing synthesis.";
+  "You are Metis, chair of the METIS council. You are not only moderating the discussion; you are thinking inside it. Lead the meeting by defining the crux, reframing the problem when needed, redirecting the room, surfacing tensions, challenging weak assumptions yourself, and contributing original ideas that move the discussion forward. Keep the other participants fluid and unlabeled rather than reducing them to fixed roles. Do not give the final answer unless explicitly asked to produce the closing synthesis.";
 
 const synthesisPrompt =
-  "You are Metis, chair of the METIS council. Produce the closing synthesis after the live discussion. Integrate the strongest arguments from the distinct contributors in the room, preserve important disagreement, make the council's accountability to Orion clear through disciplined reasoning, and end with one decisive recommended next action.";
+  "You are Metis, chair of the METIS council. Produce the closing synthesis after the live discussion for Orion. Integrate the strongest arguments from the room, preserve the disagreement that still matters, state what the council is betting on, and end with one decisive recommended next action. Do not flatten real tensions merely to create agreement.";
 
 export type CouncilContextEntry = {
   role: "user" | "agent" | "synthesis";
@@ -61,13 +62,32 @@ export type StreamCouncilTurnResult = {
   completed: boolean;
 };
 
+function buildCompanyContextBlock(profile: Awaited<ReturnType<typeof getCompanyProfile>>) {
+  if (!profile) {
+    return "Company context: No company profile has been configured yet. Use only the live session details and avoid inventing business facts.";
+  }
+
+  return [
+    "Company context:",
+    `Name: ${profile.name}`,
+    `Mission: ${profile.mission}`,
+    `Products: ${profile.products}`,
+    `Customers: ${profile.customers ?? "Not specified."}`,
+    `Constraints: ${profile.constraints ?? "Not specified."}`,
+    `Team size: ${profile.teamSize ?? "Not specified."}`,
+    `Stage: ${profile.stage ?? "Not specified."}`,
+    `Operating model: ${profile.operatingModel ?? "Not specified."}`,
+    `Geography: ${profile.geography ?? "Not specified."}`,
+  ].join("\n");
+}
+
 const councilPlan: CouncilPlanStep[] = [
   {
     kind: "discussion",
     agentName: "Metis",
     systemPrompt: chairPrompt,
     stageDirection:
-      "Open the meeting. Restate the brief, identify the central decision tension, remind the room that each member was selected for a distinct contribution and is answerable to Orion, then assign the first pass: Athena should shape the path, Argus should test the assumptions, and Loki should attack the weak points. Do not close the discussion.",
+      "Open the meeting. Restate the brief for Orion's decision, identify the central tension, contribute your own first framing of the problem, then assign the first pass: Athena should shape the path, Argus should test the assumptions, and Loki should attack the weak points. Do not close the discussion.",
   },
   {
     kind: "discussion",
@@ -95,7 +115,7 @@ const councilPlan: CouncilPlanStep[] = [
     agentName: "Metis",
     systemPrompt: chairPrompt,
     stageDirection:
-      "Chair the midpoint of the meeting. Name the most important unresolved tension created by the discussion so far, explicitly reference at least two specialists, and demand sharper closing positions. Do not synthesize the final answer yet.",
+      "Chair the midpoint of the meeting. Name the most important unresolved tension created by the discussion so far, explicitly reference at least two specialists, add your own view on what is emerging, and demand sharper closing positions. Do not synthesize the final answer yet.",
   },
   {
     kind: "discussion",
@@ -183,19 +203,21 @@ function buildStructuredPrompt(input: {
   brief: string;
   stageDirection: string;
   discussion: CouncilContextEntry[];
+  companyContext?: string;
   finalSynthesis?: boolean;
 }) {
   const priorAgentMessages = input.discussion.filter((entry) => entry.role !== "user").length;
   const engagementInstruction =
     priorAgentMessages > 0
       ? "Reference at least one earlier speaker by name and respond to their reasoning directly. If Orion has interjected, address the latest Orion intervention explicitly."
-      : "Establish the first substantive position in the meeting rather than introducing yourself or using a fixed role label.";
+      : "Establish the first substantive position in the meeting rather than introducing yourself or claiming a fixed role.";
 
   const contentInstruction = input.finalSynthesis
     ? "For content, write a decisive synthesis in two short paragraphs maximum and under 180 words."
     : "For content, write a live meeting intervention in one or two short paragraphs and keep it under 120 words.";
 
   return [
+    input.companyContext ?? "Company context: No company profile has been configured yet.",
     `Council brief:\n${input.brief}`,
     `Stage direction:\n${input.stageDirection}`,
     `Current discussion transcript:\n${formatTranscript(input.discussion)}`,
@@ -417,6 +439,7 @@ export async function streamCouncilTurn(input: {
   const discussion: MetisCouncilMessage[] = [];
   let synthesis: MetisCouncilMessage | null = null;
   let contextSequence = input.historyEntries ?? flattenTurnsToContextEntries(input.history ?? []);
+  const companyContext = buildCompanyContextBlock(await getCompanyProfile());
 
   contextSequence = [
     ...contextSequence,
@@ -447,6 +470,7 @@ export async function streamCouncilTurn(input: {
         brief: input.userMessage,
         stageDirection: step.stageDirection,
         discussion: contextSequence,
+        companyContext,
         finalSynthesis: step.kind === "synthesis",
       }),
     );
