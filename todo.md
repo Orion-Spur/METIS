@@ -64,6 +64,9 @@
 - [x] Remove the pre-assigned public role framing from the agent prompts while keeping the agent names
 - [x] Update the council prompts so each agent is told they were selected for a distinct contribution rather than a fixed label
 - [x] Make the agents explicitly answerable to Orion in the system prompt framing and visible council copy where appropriate
-- [ ] Publish the latest checkpoint so the active metis.ooo deployment receives the updated prompt and UI framing
-- [ ] Re-run browser verification on https://www.metis.ooo/council after publication and confirm the role labels are gone from the live experience
-- [ ] Submit a live council brief on metis.ooo after publication and confirm the transcript reflects distinct-contribution framing and accountability to Orion
+- [x] Publish the latest checkpoint so the active metis.ooo deployment receives the updated prompt and UI framing (superseded by the GitHub/Vercel deployment path requested by the user)
+- [x] Re-run browser verification on https://www.metis.ooo/council after publication and confirm the role labels are gone from the live experience (completed against the GitHub/Vercel production deployment on metis.ooo)
+- [x] Submit a live council brief on metis.ooo after publication and confirm the transcript reflects distinct-contribution framing and accountability to Orion (completed against the GitHub/Vercel production deployment on metis.ooo)
+- [x] Commit and push the latest METIS chaired-discussion and Orion-accountability changes to GitHub so Vercel can deploy them
+- [x] Verify that the Vercel-backed metis.ooo deployment picks up the new framing after the GitHub push
+- [x] Submit a live council brief on metis.ooo after the Vercel deployment updates and confirm the transcript reflects distinct-contribution framing and accountability to Orion
