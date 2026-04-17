@@ -76,10 +76,11 @@
 - [x] Implement interjection logic to inject Orion's message into the active council turn
 - [x] Write vitest tests for streaming endpoint and interjection flow
 - [x] Verify real-time chat experience on local dev server
-- [ ] Verify real-time chat and interjection on live metis.ooo deployment
+- [x] Verify real-time chat and interjection on live metis.ooo deployment
 - [x] Fix the council composer submit control so live streaming starts reliably without accidental page navigation during browser use
-- [ ] Re-run browser verification after the submit regression fix and confirm streaming plus Orion interjection work end to end
+- [x] Re-run browser verification after the submit regression fix and confirm streaming plus Orion interjection work end to end
 - [x] Fix the council streaming route so aborted readers do not attempt to enqueue after the NDJSON controller has been closed
-- [ ] Push the latest METIS real-time council changes to the GitHub repository so Vercel can deploy them
-- [ ] Verify the Vercel deployment receives the new METIS streaming council update
-- [ ] Validate real-time chat and Orion interjection behavior on the live production site after the deployment updates
+- [x] Push the latest METIS real-time council changes to the GitHub repository so Vercel can deploy them
+- [x] Verify the Vercel deployment receives the new METIS streaming council update
+- [x] Validate real-time chat and Orion interjection behavior on the live production site after the deployment updates
+- [ ] Investigate and fix the production interjection flow so the live session remains in the expected active state after Orion redirects mid-discussion, then re-verify it end to end

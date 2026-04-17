@@ -138,11 +138,16 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
     };
   }, []);
 
+  const hasLiveSession = useMemo(
+    () => Boolean(sessionId) && messages.length > 0,
+    [sessionId, messages.length],
+  );
+
   const councilStatus = useMemo(() => {
     if (isStreaming) return "Council is speaking live";
-    if (messages.length === 0) return "Awaiting the first brief";
-    return "Live chaired debate ready";
-  }, [isStreaming, messages.length]);
+    if (!hasLiveSession) return "Awaiting the first brief";
+    return "Council ready for Orion redirect";
+  }, [hasLiveSession, isStreaming]);
 
   const consumeCouncilStream = async (response: Response) => {
     if (!response.body) {
@@ -418,14 +423,14 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
                   htmlFor="council-brief"
                   className="text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.75)]"
                 >
-                  {isStreaming ? "Interject now" : "New brief"}
+                  {hasLiveSession ? "Interject now" : "New brief"}
                 </label>
                 <textarea
                   id="council-brief"
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
                   placeholder={
-                    isStreaming
+                    hasLiveSession
                       ? "Interrupt the room with a correction, challenge, or new instruction for Orion's council."
                       : "Ask the council to debate a strategy, architecture, campaign, or product decision."
                   }
@@ -456,7 +461,7 @@ export default function CouncilInterface({ initialSessionId, initialTurns, usern
                       className="inline-flex items-center justify-center gap-2 rounded-full bg-[#d6a24f] px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#140d05] transition hover:bg-[#e0b163]"
                     >
                       <SendHorizontal className="h-4 w-4" />
-                      {isStreaming ? "Send interjection" : "Convene council"}
+                      {hasLiveSession ? "Send interjection" : "Convene council"}
                     </button>
                   </div>
                 </div>

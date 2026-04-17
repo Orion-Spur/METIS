@@ -5,3 +5,5 @@ Browser verification notes for live council streaming:
 - DOM inspection shows the council button is now type="button", which confirms the accidental native form post regression was fixed.
 - The current blocker appears to be browser automation not reliably driving the React-controlled textarea state on this page, rather than the previous native form submission path.
 - Focused Vitest coverage for council streaming and route NDJSON events passes locally.
+Production verification update: the live https://www.metis.ooo/council page now reflects the deployed streaming UI. After a scripted Orion brief, the page switches into a live state, shows the Orion transcript card immediately, replaces the composer with interjection controls, and exposes both Stop Run and Send Interjection actions.
+Production verification continued: the live transcript streamed Orion, then Metis and Athena incrementally, followed by Argus. A mid-discussion Orion interjection was accepted on the production page and appended into the visible transcript, showing that the deployed session accepts redirects from the live context.
