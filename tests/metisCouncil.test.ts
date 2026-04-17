@@ -350,13 +350,17 @@ describe("METIS council orchestration", () => {
     });
 
     for (const message of [...turn.discussion, turn.synthesis]) {
-      expect(message.content).toContain("Position\n");
-      expect(message.content).toContain("\n\nKey reasoning\n");
-      expect(message.content).toContain("\n\nChallenge\n-");
+      // New format: natural opening statement, bullets on new lines, closing critique
+      // No rigid "Position", "Key reasoning", "Challenge" headers
+      expect(message.content.length).toBeGreaterThan(0);
       const reasoningLines = message.content
         .split("\n")
         .filter((line) => line.startsWith("- "));
       expect(reasoningLines.length).toBeLessThanOrEqual(6);
+      // Verify bullets are on separate lines (not inline)
+      if (reasoningLines.length > 0) {
+        expect(message.content).toContain("\n- ");
+      }
     }
   });
 

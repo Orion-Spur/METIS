@@ -57,17 +57,17 @@ export const metisAgentProfiles: Record<
   },
   Argus: {
     title: "Selected Member",
-    accentClassName: "text-emerald-300",
-    borderClassName: "border-emerald-300/30",
-    glowClassName: "shadow-[0_0_40px_rgba(110,231,183,0.12)]",
+    accentClassName: "text-purple-300",
+    borderClassName: "border-purple-300/30",
+    glowClassName: "shadow-[0_0_40px_rgba(216,180,254,0.12)]",
     description:
       "Argus was selected because he brings a distinctive ability to test evidence, expose assumptions, and sharpen the standard of proof.",
   },
   Loki: {
     title: "Selected Member",
-    accentClassName: "text-rose-300",
-    borderClassName: "border-rose-300/30",
-    glowClassName: "shadow-[0_0_40px_rgba(253,164,175,0.12)]",
+    accentClassName: "text-green-300",
+    borderClassName: "border-green-300/30",
+    glowClassName: "shadow-[0_0_40px_rgba(134,239,172,0.12)]",
     description:
       "Loki was selected because he brings a distinctive ability to challenge weak logic, surface failure modes, and prevent easy consensus.",
   },
