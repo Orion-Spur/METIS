@@ -114,8 +114,8 @@
 - [x] Reassess whether the explicit line that the council is answerable to Orion should remain in every agent prompt or be softened
 - [x] Produce a cleaner prompt set for Athena, Argus, Loki, Metis-as-chair, and Metis synthesis
 - [x] Ensure Athena, Argus, and Loki are described only through capabilities and behaviour, without any fixed role or title, while Metis remains the only explicitly titled chair
-- [ ] Add a focused test that simulates aborted or closed council streams and proves the route does not attempt to enqueue or close after shutdown
-- [ ] Reproduce an aborted council stream after the route fix and confirm the logs no longer show `Controller is already closed`
+- [x] Add a focused test that simulates aborted or closed council streams and proves the route does not attempt to enqueue or close after shutdown
+- [x] Reproduce an aborted council stream after the route fix and confirm the logs no longer show `Controller is already closed`
 - [x] Enforce a mandatory council response format with Position, Key reasoning, and Challenge sections for every agent turn
 - [x] Refine council formatting to use natural bullet flow without rigid section headers
 - [x] Update agent colors: Argus to purple, Loki to green
