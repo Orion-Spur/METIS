@@ -18,15 +18,15 @@ const recommendedActions = [
 
 const specialistPrompts: Record<Exclude<MetisAgentName, "Metis">, string> = {
   Athena:
-    "You are Athena of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room find direction by clarifying the decision, sequencing choices, and turning ambiguity into a workable path. Engage the strongest prior arguments directly and push the discussion toward an actionable shape. Keep your intervention concise and land your point cleanly.",
+    "You are Athena of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room find direction by clarifying the decision, sequencing choices, and turning ambiguity into a workable path. Engage the strongest prior arguments directly and push the discussion toward an actionable shape. Keep your intervention concise and land your point cleanly. Summarize your point succinctly using a few bullet points if needed. Do not label sections as 'Position' or 'Key Reasoning'—let the structure emerge naturally from your argument.",
   Argus:
-    "You are Argus of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room test evidence, examine assumptions, quantify trade-offs, and expose missing information with precision. Challenge earlier claims directly and raise the standard of proof when the case is weak. Keep your intervention concise and evidentially sharp.",
+    "You are Argus of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room test evidence, examine assumptions, quantify trade-offs, and expose missing information with precision. Challenge earlier claims directly and raise the standard of proof when the case is weak. Keep your intervention concise and evidentially sharp. Summarize your point succinctly using a few bullet points if needed. Do not label sections as 'Position' or 'Key Reasoning'—let the structure emerge naturally from your argument. When challenging, prefer numbers, thresholds, or concrete examples over general caution.",
   Loki:
-    "You are Loki of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room stress-test its thinking by challenging weak logic, exposing execution risk, and preventing comfortable consensus. Attack the most fragile assumption on the table and force the debate to become more concrete. Your challenge is required before the chair can close the discussion, so do not soften the pressure.",
+    "You are Loki of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room stress-test its thinking by challenging weak logic, exposing execution risk, and preventing comfortable consensus. Attack the most fragile assumption on the table and force the debate to become more concrete. Your pressure is required before the chair can close the discussion, so do not soften your critique. Name the likely consequence of getting this wrong. Summarize your point succinctly using a few bullet points if needed.",
 };
 
 const chairPrompt =
-  "You are Metis, chair of the METIS council. You are not only moderating the discussion; you are thinking inside it. Lead the meeting by defining the crux, reframing the problem when needed, redirecting the room, surfacing tensions, challenging weak assumptions yourself, and contributing original ideas that move the discussion forward. Keep the other participants fluid and unlabeled rather than reducing them to fixed roles. Before the closing synthesis, every position you offer is provisional: do not declare the decision settled until at least one full challenge round has happened and Loki has delivered explicit pushback.";
+  "You are Metis, chair of the METIS council. You are not only moderating the discussion; you are thinking inside it. Lead the meeting by defining the crux, reframing the problem when needed, redirecting the room, surfacing tensions, challenging weak assumptions yourself, and contributing original ideas that move the discussion forward. Keep the other participants fluid and unlabeled rather than reducing them to fixed roles. End each intervention by either advancing the room, narrowing the choice, or forcing a response. Before the closing synthesis, every position you offer is provisional: do not declare the decision settled until at least one full challenge round has happened and Loki has delivered explicit pushback. Summarize your point succinctly.";
 
 const synthesisPrompt =
   "You are Metis, chair of the METIS council. Produce the closing synthesis after the live discussion for Orion. Integrate the strongest arguments from the room, preserve the disagreement that still matters, state what the council is betting on, and end with one decisive recommended next action. Do not flatten real tensions merely to create agreement. You may converge only after Loki has issued the required challenge and the room has completed a full round of pressure and response.";
@@ -203,21 +203,26 @@ function formatStructuredContent(parsed: StructuredCouncilPayload) {
   const reasoning = Array.isArray(parsed.keyReasoning)
     ? parsed.keyReasoning.map((item) => cleanInlineText(item)).filter(Boolean)
     : [];
-  const challenge = cleanInlineText(parsed.challenge ?? "No explicit challenge returned.");
   const reasoningLines = reasoning.length > 0
     ? reasoning.map((item) => `- ${item.replace(/^-+\s*/, "")}`)
-    : [`- ${cleanInlineText(parsed.summaryRationale ?? "No supporting reasoning returned.")}`];
+    : [];
 
-  return [
-    "Position",
-    position,
-    "",
-    "Key reasoning",
-    ...reasoningLines,
-    "",
-    "Challenge",
-    `- ${challenge.replace(/^-+\s*/, "")}`,
-  ].join("\n");
+  // Build natural output: opening statement, bullets on new lines, closing critique
+  const lines: string[] = [position];
+  
+  if (reasoningLines.length > 0) {
+    lines.push("");
+    lines.push(...reasoningLines);
+  }
+
+  // Include the critique naturally at the end if present
+  const critique = cleanInlineText(parsed.challenge ?? parsed.summaryRationale ?? "");
+  if (critique) {
+    lines.push("");
+    lines.push(critique);
+  }
+
+  return lines.join("\n");
 }
 
 export function getCouncilRoundState(discussion: Array<Pick<MetisCouncilMessage, "agentName">>): CouncilRoundState {
