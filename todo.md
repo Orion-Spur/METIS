@@ -132,5 +132,12 @@
 - [ ] Browser-verify cross-session insight creation and reuse across two separate sessions, and confirm prior learnings appear safely in later deliberations
 - [ ] Browser-verify admin user creation, role toggle, and access pause or restore with real authentication checks for active versus inactive users
 - [x] Add focused non-mocked tests for session insight refresh and session preview search behaviour against the real METIS database layer
-- [ ] Diagnose why this METIS workspace is not syncing commits to GitHub and restore a working push path
-- [ ] Retry GitHub sync after refreshed GitHub and Vercel authorisation and confirm whether direct push access is restored in this workspace
+- [x] Diagnose why this METIS workspace is not syncing commits to GitHub and restore a working push path
+- [x] Retry GitHub sync after refreshed GitHub and Vercel authorisation and confirm whether direct push access is restored in this workspace
+- [x] Fix prior-session recall so live council responses can deliberately surface relevant cross-session memory instead of acting like no previous discussion exists
+- [x] Expand the live council transcript so the active conversation becomes the dominant full-width workspace once a session starts
+- [x] Render council markdown cleanly in transcript cards so heading markers like ### are displayed as styled headings rather than raw syntax
+- [ ] Browser-verify that prior-session recall appears in live council responses for a fresh-room continuity question using real stored insights, and refine retrieval/prompting if it still does not surface to users
+- [ ] Browser-verify the active council workspace layout after session start and adjust the responsive grid so the transcript clearly becomes the dominant full-width panel on desktop
+- [ ] Browser-verify transcript cards on the live council page after the rich-text renderer change to confirm markdown headings and lists render cleanly in the integrated UI
+- [ ] Push the current recall, live transcript layout, and markdown rendering fix set to GitHub immediately for live user testing before the remaining browser verification pass

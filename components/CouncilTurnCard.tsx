@@ -1,4 +1,5 @@
 import type { MetisCouncilTurn, MetisRecommendedAction } from "@/shared/metis";
+import CouncilRichText from "@/components/CouncilRichText";
 import { metisAgentProfiles } from "@/shared/metis";
 
 function formatRecommendedAction(action: MetisRecommendedAction) {
@@ -51,7 +52,10 @@ export default function CouncilTurnCard({ turn, turnIndex }: Props) {
                     <div className="mt-1">Action {formatRecommendedAction(message.recommendedAction)}</div>
                   </div>
                 </div>
-                <p className="mt-3 text-sm leading-7 text-[rgba(247,236,209,0.9)]">{message.content}</p>
+                <CouncilRichText
+                  content={message.content}
+                  className="mt-3 text-sm leading-7 text-[rgba(247,236,209,0.9)]"
+                />
                 <p className="mt-4 text-xs leading-6 text-[rgba(243,231,192,0.65)]">{message.summaryRationale}</p>
               </section>
             );
@@ -65,7 +69,10 @@ export default function CouncilTurnCard({ turn, turnIndex }: Props) {
         <div className={`text-xs uppercase tracking-[0.35em] ${metisAgentProfiles.Metis.accentClassName}`}>
           Metis synthesis
         </div>
-        <p className="mt-3 text-sm leading-7 text-[rgba(249,239,212,0.95)]">{turn.synthesis.content}</p>
+        <CouncilRichText
+          content={turn.synthesis.content}
+          className="mt-3 text-sm leading-7 text-[rgba(249,239,212,0.95)]"
+        />
         <div className="mt-4 flex flex-wrap gap-3 text-xs uppercase tracking-[0.28em] text-[rgba(214,162,79,0.76)]">
           <span>Confidence {Math.round(turn.synthesis.confidence * 100)}%</span>
           <span>Action {formatRecommendedAction(turn.synthesis.recommendedAction)}</span>

@@ -448,6 +448,35 @@ describe("METIS council orchestration", () => {
     expect(anthropicCallBody.messages[0].content).toContain("trustworthy memory");
   });
 
+  it("routes fresh-room continuity questions toward prior-session memory when insights exist", async () => {
+    const fetchMock = createFetchMock();
+
+    vi.stubGlobal("fetch", fetchMock);
+    const council = await loadCouncilModule();
+    await council.streamCouncilTurn({
+      sessionId: "session-memory",
+      userMessage: "What has been agreed in today's discussions?",
+      relatedInsights: [
+        {
+          id: 11,
+          userId: 7,
+          sourceSessionId: "session-old",
+          title: "Pilot launch before full rollout",
+          insight: "Prior sessions agreed to test the roadmap in one narrow segment before expansion.",
+          rationale: "This preserved evidence and limited execution risk.",
+          tags: ["launch", "governance"],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ],
+    });
+
+    const anthropicCallBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}"));
+    expect(anthropicCallBody.messages[0].content).toContain("use the retrieved prior-session learnings directly");
+    expect(anthropicCallBody.messages[0].content).toContain("State clearly that they come from earlier sessions");
+    expect(anthropicCallBody.messages[0].content).toContain("Pilot launch before full rollout");
+  });
+
   it("reuses live Orion interjection context when the discussion is resumed mid-stream", async () => {
     const fetchMock = createFetchMock();
     const historyEntries: CouncilContextEntry[] = [

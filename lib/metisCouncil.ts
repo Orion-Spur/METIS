@@ -377,10 +377,21 @@ function buildStructuredPrompt(input: {
   finalSynthesis?: boolean;
 }) {
   const priorAgentMessages = input.discussion.filter((entry) => entry.role !== "user").length;
+  const recallIntent = /\b(agreed|agreement|agreements|decided|decision|decisions|summary|summarise|summarize|recap|recall|previous session|prior session|earlier session|where we left off|what happened|what has been agreed|today(?:'s)? discussion|today(?:'s)? discussions|this discussion|this session)\b/i.test(
+    input.brief,
+  );
   const engagementInstruction =
     priorAgentMessages > 0
       ? "Reference at least one earlier speaker by name and respond to their reasoning directly. If Orion has interjected, address the latest Orion intervention explicitly."
       : "Establish the first substantive position in the meeting rather than introducing yourself or claiming a fixed role.";
+
+  const recallInstruction = recallIntent
+    ? priorAgentMessages > 0
+      ? "Orion is asking for continuity. Summarize what this live session has actually established so far before reaching for older memory, and keep any cross-session recall clearly labeled as prior memory."
+      : input.relatedInsights && input.relatedInsights.length > 0
+        ? "Orion is asking for continuity in a fresh room. Because the live session has little or no substantive transcript yet, use the retrieved prior-session learnings directly. State clearly that they come from earlier sessions rather than from this live exchange."
+        : "Orion is asking for continuity, but no earlier learnings were retrieved. Be explicit about the lack of prior memory instead of pretending this fresh room has already decided something."
+    : "If relevant prior learnings exist, use them deliberately and label them as prior-session memory rather than current-room agreement.";
 
   const contentInstruction = input.finalSynthesis
     ? "You are producing the final close. Keep it compact, decisive, and under 110 words total across all visible sections. Preserve the most important disagreement instead of burying it."
@@ -410,6 +421,7 @@ function buildStructuredPrompt(input: {
     `Stage direction:\n${input.stageDirection}`,
     `Current discussion transcript:\n${formatTranscript(input.discussion)}`,
     engagementInstruction,
+    recallInstruction,
     contentInstruction,
     convergenceInstruction,
     "Council response format is mandatory.",

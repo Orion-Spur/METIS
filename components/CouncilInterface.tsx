@@ -19,6 +19,7 @@ import type {
   MetisUserAdminRecord,
 } from "@/shared/metis";
 import { metisAgentProfiles } from "@/shared/metis";
+import CouncilRichText from "@/components/CouncilRichText";
 import CouncilTurnCard from "@/components/CouncilTurnCard";
 
 type Props = {
@@ -184,6 +185,8 @@ export default function CouncilInterface({
     [sessionId, messages.length],
   );
 
+  const liveWorkspace = hasLiveSession || isStreaming;
+
   const councilStatus = useMemo(() => {
     if (isStreaming) return "Council is speaking live";
     if (!hasLiveSession) return "Awaiting the first brief";
@@ -238,6 +241,7 @@ export default function CouncilInterface({
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let resolvedSessionId = sessionId;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -258,6 +262,7 @@ export default function CouncilInterface({
         const event = JSON.parse(trimmed) as StreamEvent;
 
         if (event.type === "start") {
+          resolvedSessionId = event.sessionId;
           setSessionId(event.sessionId);
           continue;
         }
@@ -284,6 +289,8 @@ export default function CouncilInterface({
         }
       }
     }
+
+    return resolvedSessionId;
   };
 
   const submitMessage = async (rawMessage: string) => {
@@ -340,9 +347,11 @@ export default function CouncilInterface({
         throw new Error(payload.error ?? "The council could not process that request.");
       }
 
-      await consumeCouncilStream(response);
-      if (sessionId) {
-        await loadHistory(historyQuery, sessionId);
+      const resolvedSessionId = await consumeCouncilStream(response);
+      if (resolvedSessionId) {
+        await loadHistory(historyQuery, resolvedSessionId);
+      } else {
+        await loadHistory(historyQuery);
       }
     } catch (submissionError) {
       if (controller.signal.aborted) {
@@ -426,7 +435,7 @@ export default function CouncilInterface({
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(214,162,79,0.12),transparent_24%),linear-gradient(180deg,#060606,#090705)] px-4 py-6 text-[#f4e7c5] md:px-8">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+      <div className={`mx-auto flex w-full ${liveWorkspace ? "max-w-[1500px]" : "max-w-7xl"} flex-col gap-6`}>
         <header className="rounded-[2rem] border border-[rgba(214,162,79,0.22)] bg-[rgba(10,8,6,0.82)] p-5 shadow-[0_0_40px_rgba(214,162,79,0.12)] backdrop-blur-xl">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -454,214 +463,405 @@ export default function CouncilInterface({
           </div>
         </header>
 
-        <section className="grid gap-4 xl:grid-cols-[0.95fr_1.8fr_1.05fr]">
-          <aside className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
-            <div className="mb-4 text-xs uppercase tracking-[0.4em] text-[rgba(214,162,79,0.75)]">Council Members</div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              {Object.entries(metisAgentProfiles).map(([name, profile]) => (
-                <article
-                  key={name}
-                  className={`rounded-[1.5rem] border bg-black/25 p-4 ${profile.borderClassName} ${profile.glowClassName}`}
-                >
-                  <div className={`text-xs uppercase tracking-[0.35em] ${profile.accentClassName}`}>{name}</div>
-                  <div className="mt-2 font-serif text-2xl text-[#f7ebc8]">{profile.title}</div>
-                  <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.72)]">{profile.description}</p>
-                </article>
-              ))}
-            </div>
-
-            <div className="mt-6 rounded-[1.5rem] border border-[rgba(214,162,79,0.18)] bg-black/20 p-4">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">
-                <Search className="h-4 w-4" />
-                Session history
-              </div>
-              <form onSubmit={handleHistorySearch} className="mt-4 space-y-3">
-                <input
-                  value={historyQuery}
-                  onChange={(event) => setHistoryQuery(event.target.value)}
-                  placeholder="Search sessions, summaries, or transcript text"
-                  className="w-full rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8] placeholder:text-[rgba(214,162,79,0.42)]"
-                />
-                <button
-                  type="submit"
-                  className="w-full rounded-full border border-[rgba(214,162,79,0.2)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#f6e7be] transition hover:border-[rgba(214,162,79,0.42)]"
-                >
-                  {isHistoryLoading ? "Searching" : "Search history"}
-                </button>
-              </form>
-              <div className="mt-4 space-y-3">
-                {historySessions.map((entry) => (
-                  <button
-                    key={entry.sessionId}
-                    type="button"
-                    onClick={() => void handleSelectSession(entry.sessionId)}
-                    className={`w-full rounded-[1.2rem] border p-3 text-left transition ${entry.sessionId === sessionId ? "border-[rgba(214,162,79,0.42)] bg-[rgba(214,162,79,0.08)]" : "border-[rgba(214,162,79,0.12)] bg-black/20 hover:border-[rgba(214,162,79,0.3)]"}`}
-                  >
-                    <div className="text-xs uppercase tracking-[0.28em] text-[rgba(214,162,79,0.72)]">{entry.turnCount} turns</div>
-                    <div className="mt-2 text-sm font-semibold text-[#f7ebc8]">{entry.title}</div>
-                    <p className="mt-2 text-xs leading-6 text-[rgba(243,231,192,0.68)]">{entry.matchedText ?? entry.summary ?? "No summary yet."}</p>
-                    <div className="mt-2 text-[11px] uppercase tracking-[0.24em] text-[rgba(243,231,192,0.48)]">{formatTimestamp(entry.updatedAt)}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </aside>
-
-          <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
-            <div className="flex min-h-[65vh] flex-col gap-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.4em] text-[rgba(214,162,79,0.75)]">Live Council Transcript</div>
-                  {activeSessionPreview ? (
-                    <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.68)]">{activeSessionPreview.summary ?? "This session summary will appear after Metis synthesises."}</p>
+        {liveWorkspace ? (
+          <section className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_22rem]">
+            <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
+              <div className="flex min-h-[74vh] flex-col gap-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.4em] text-[rgba(214,162,79,0.75)]">Live Council Transcript</div>
+                    {activeSessionPreview ? (
+                      <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.68)]">{activeSessionPreview.summary ?? "This session summary will appear after Metis synthesises."}</p>
+                    ) : (
+                      <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.68)]">The active room now owns the workspace. Cross-session memory and history stay available in the side rail without constraining the live transcript.</p>
+                    )}
+                  </div>
+                  {isStreaming ? (
+                    <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-[rgba(243,231,192,0.6)]">
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                      {activePrompt ? "Deliberation in progress" : "Streaming"}
+                    </div>
                   ) : null}
                 </div>
-                {isStreaming ? (
-                  <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-[rgba(243,231,192,0.6)]">
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                    {activePrompt ? "Deliberation in progress" : "Streaming"}
-                  </div>
-                ) : null}
-              </div>
 
-              <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
-                {messages.length === 0 ? (
-                  <div className="rounded-[1.5rem] border border-dashed border-[rgba(214,162,79,0.22)] bg-black/20 p-6 text-sm leading-7 text-[rgba(243,231,192,0.68)]">
-                    Submit the first brief to convene the council. Metis will open the meeting, the selected members will answer in sequence, and Orion can redirect the room while it is still live.
-                  </div>
-                ) : (
-                  messages.map((entry) => {
-                    const visuals = getMessageVisuals(entry);
-                    return (
-                      <div key={entry.id} className={`flex w-full flex-col ${visuals.alignClassName}`}>
-                        <article className={`w-full max-w-3xl rounded-[1.5rem] border p-4 shadow-[0_0_32px_rgba(0,0,0,0.18)] ${visuals.containerClassName}`}>
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <div className={`text-xs uppercase tracking-[0.32em] ${visuals.accentClassName}`}>{entry.speakerName}</div>
-                              <div className="mt-1 text-[11px] uppercase tracking-[0.26em] text-[rgba(243,231,192,0.48)]">{visuals.metaLabel}</div>
-                            </div>
-                            {entry.role !== "user" ? (
-                              <div className="text-right text-[11px] uppercase tracking-[0.24em] text-[rgba(214,162,79,0.72)]">
-                                {typeof entry.confidence === "number" ? <div>Confidence {Math.round(entry.confidence * 100)}%</div> : null}
-                                {entry.recommendedAction ? <div className="mt-1">Action {formatRecommendedAction(entry.recommendedAction)}</div> : null}
+                <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
+                  {messages.length === 0 ? (
+                    <div className="rounded-[1.5rem] border border-dashed border-[rgba(214,162,79,0.22)] bg-black/20 p-6 text-sm leading-7 text-[rgba(243,231,192,0.68)]">
+                      Submit the first brief to convene the council. Metis will open the meeting, the selected members will answer in sequence, and Orion can redirect the room while it is still live.
+                    </div>
+                  ) : (
+                    messages.map((entry) => {
+                      const visuals = getMessageVisuals(entry);
+                      return (
+                        <div key={entry.id} className={`flex w-full ${entry.role === "user" ? "justify-end" : "justify-start"}`}>
+                          <article className={`w-full ${entry.role === "user" ? "max-w-5xl" : "max-w-none"} rounded-[1.5rem] border p-5 shadow-[0_0_32px_rgba(0,0,0,0.18)] ${visuals.containerClassName}`}>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className={`text-xs uppercase tracking-[0.32em] ${visuals.accentClassName}`}>{entry.speakerName}</div>
+                                <div className="mt-1 text-[11px] uppercase tracking-[0.26em] text-[rgba(243,231,192,0.48)]">{visuals.metaLabel}</div>
                               </div>
-                            ) : null}
-                          </div>
-                          <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-[rgba(247,236,209,0.94)]">{entry.content}</div>
-                          {entry.summaryRationale ? <p className="mt-4 text-xs leading-6 text-[rgba(243,231,192,0.68)]">{entry.summaryRationale}</p> : null}
-                        </article>
-                      </div>
-                    );
-                  })
-                )}
-                <div ref={transcriptEndRef} />
-              </div>
-
-              <form onSubmit={handleSubmit} className="mt-2 rounded-[1.75rem] border border-[rgba(214,162,79,0.18)] bg-black/20 p-4">
-                <label htmlFor="council-brief" className="text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.75)]">
-                  {hasLiveSession ? "Interject now" : "New brief"}
-                </label>
-                <textarea
-                  id="council-brief"
-                  value={message}
-                  onChange={(event) => setMessage(event.target.value)}
-                  placeholder={hasLiveSession ? "Interrupt the room with a correction, challenge, or new instruction for Orion's council." : "Ask the council to debate a strategy, architecture, campaign, or product decision."}
-                  className="mt-3 min-h-28 w-full resize-none rounded-[1.2rem] border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-4 text-sm leading-7 text-[#f7ebc8] placeholder:text-[rgba(214,162,79,0.42)]"
-                />
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-xs leading-6 text-[rgba(243,231,192,0.62)]">The transcript behaves like a live room. Orion’s message appears immediately, each council response arrives incrementally, and you can stop the current run before sending a redirect.</div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    {isStreaming ? (
-                      <button type="button" onClick={handleStop} className="inline-flex items-center justify-center gap-2 rounded-full border border-[rgba(214,162,79,0.26)] px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#f6e7be] transition hover:border-[rgba(214,162,79,0.46)]">
-                        <Square className="h-4 w-4" />
-                        Stop run
-                      </button>
-                    ) : null}
-                    <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#d6a24f] px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#140d05] transition hover:bg-[#e0b163]">
-                      <SendHorizontal className="h-4 w-4" />
-                      {hasLiveSession ? "Send interjection" : "Convene council"}
-                    </button>
-                  </div>
+                              {entry.role !== "user" ? (
+                                <div className="text-right text-[11px] uppercase tracking-[0.24em] text-[rgba(214,162,79,0.72)]">
+                                  {typeof entry.confidence === "number" ? <div>Confidence {Math.round(entry.confidence * 100)}%</div> : null}
+                                  {entry.recommendedAction ? <div className="mt-1">Action {formatRecommendedAction(entry.recommendedAction)}</div> : null}
+                                </div>
+                              ) : null}
+                            </div>
+                            <CouncilRichText content={entry.content} className="mt-4" />
+                            {entry.summaryRationale ? <p className="mt-4 text-xs leading-6 text-[rgba(243,231,192,0.68)]">{entry.summaryRationale}</p> : null}
+                          </article>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={transcriptEndRef} />
                 </div>
-                {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
-              </form>
-            </div>
-          </section>
 
-          <aside className="space-y-4">
-            <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">
-                <Shield className="h-4 w-4" />
-                Cross-session memory
-              </div>
-              <div className="mt-4 space-y-3">
-                {insights.length === 0 ? (
-                  <p className="text-sm leading-7 text-[rgba(243,231,192,0.68)]">As new sessions close, METIS will surface reusable summaries here so Orion can recall prior bets and tensions quickly.</p>
-                ) : (
-                  insights.map((entry) => (
-                    <article key={entry.id} className="rounded-[1.35rem] border border-[rgba(214,162,79,0.14)] bg-black/20 p-4">
-                      <div className="text-xs uppercase tracking-[0.28em] text-[rgba(214,162,79,0.72)]">{entry.tags.join(" · ") || "Reusable insight"}</div>
-                      <div className="mt-2 font-semibold text-[#f7ebc8]">{entry.title}</div>
-                      <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.72)]">{entry.insight}</p>
-                      {entry.rationale ? <p className="mt-3 text-xs leading-6 text-[rgba(243,231,192,0.56)]">{entry.rationale}</p> : null}
-                    </article>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
-              <div className="text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">Selected session transcript</div>
-              <div className="mt-4 space-y-4 max-h-[28rem] overflow-y-auto pr-1">
-                {historyTurns.length === 0 ? (
-                  <p className="text-sm leading-7 text-[rgba(243,231,192,0.68)]">Choose a prior session from the history rail to inspect the full council turns.</p>
-                ) : (
-                  historyTurns.map((turn, index) => <CouncilTurnCard key={`${turn.sessionId}-${turn.createdAt}-${index}`} turn={turn} turnIndex={index} />)
-                )}
+                <form onSubmit={handleSubmit} className="sticky bottom-0 mt-2 rounded-[1.75rem] border border-[rgba(214,162,79,0.18)] bg-[rgba(6,6,6,0.94)] p-4 shadow-[0_0_40px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+                  <label htmlFor="council-brief" className="text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.75)]">
+                    {hasLiveSession ? "Interject now" : "New brief"}
+                  </label>
+                  <textarea
+                    id="council-brief"
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                    placeholder={hasLiveSession ? "Interrupt the room with a correction, challenge, or new instruction for Orion's council." : "Ask the council to debate a strategy, architecture, campaign, or product decision."}
+                    className="mt-3 min-h-28 w-full resize-none rounded-[1.2rem] border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-4 text-sm leading-7 text-[#f7ebc8] placeholder:text-[rgba(214,162,79,0.42)]"
+                  />
+                  <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="text-xs leading-6 text-[rgba(243,231,192,0.62)]">The transcript behaves like a live room. Orion’s message appears immediately, each council response arrives incrementally, and you can stop the current run before sending a redirect.</div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {isStreaming ? (
+                        <button type="button" onClick={handleStop} className="inline-flex items-center justify-center gap-2 rounded-full border border-[rgba(214,162,79,0.26)] px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#f6e7be] transition hover:border-[rgba(214,162,79,0.46)]">
+                          <Square className="h-4 w-4" />
+                          Stop run
+                        </button>
+                      ) : null}
+                      <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#d6a24f] px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#140d05] transition hover:bg-[#e0b163]">
+                        <SendHorizontal className="h-4 w-4" />
+                        {hasLiveSession ? "Send interjection" : "Convene council"}
+                      </button>
+                    </div>
+                  </div>
+                  {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+                </form>
               </div>
             </section>
 
-            {userRole === "admin" ? (
+            <aside className="space-y-4 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:pr-1">
               <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">
-                  <Users className="h-4 w-4" />
-                  User administration
+                  <Search className="h-4 w-4" />
+                  Session history
                 </div>
-                <form onSubmit={handleCreateUser} className="mt-4 grid gap-3">
-                  <input value={newUser.username} onChange={(event) => setNewUser((current) => ({ ...current, username: event.target.value }))} placeholder="Username" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
-                  <input value={newUser.name} onChange={(event) => setNewUser((current) => ({ ...current, name: event.target.value }))} placeholder="Display name" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
-                  <input value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} placeholder="Email" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
-                  <input value={newUser.password} onChange={(event) => setNewUser((current) => ({ ...current, password: event.target.value }))} placeholder="Temporary password" type="password" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
-                  <select value={newUser.role} onChange={(event) => setNewUser((current) => ({ ...current, role: event.target.value as "user" | "admin" }))} className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]">
-                    <option value="user">User</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                  <button type="submit" className="rounded-full bg-[#d6a24f] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#140d05]">Create user</button>
+                <form onSubmit={handleHistorySearch} className="mt-4 space-y-3">
+                  <input
+                    value={historyQuery}
+                    onChange={(event) => setHistoryQuery(event.target.value)}
+                    placeholder="Search sessions, summaries, or transcript text"
+                    className="w-full rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8] placeholder:text-[rgba(214,162,79,0.42)]"
+                  />
+                  <button
+                    type="submit"
+                    className="w-full rounded-full border border-[rgba(214,162,79,0.2)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#f6e7be] transition hover:border-[rgba(214,162,79,0.42)]"
+                  >
+                    {isHistoryLoading ? "Searching" : "Search history"}
+                  </button>
                 </form>
                 <div className="mt-4 space-y-3">
-                  {adminUsers.map((entry) => (
-                    <article key={entry.id} className="rounded-[1.2rem] border border-[rgba(214,162,79,0.12)] bg-black/20 p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-[#f7ebc8]">{entry.name || entry.username || `User ${entry.id}`}</div>
-                          <div className="mt-1 text-xs uppercase tracking-[0.24em] text-[rgba(243,231,192,0.5)]">{entry.username ?? "No username"} · {entry.email ?? "No email"}</div>
-                        </div>
-                        <div className="text-[11px] uppercase tracking-[0.24em] text-[rgba(214,162,79,0.72)]">{entry.role} · {entry.isActive ? "active" : "paused"}</div>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" disabled={isAdminSaving === entry.id} onClick={() => void updateUser(entry.id, { role: entry.role === "admin" ? "user" : "admin" })} className="rounded-full border border-[rgba(214,162,79,0.2)] px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-[#f6e7be] disabled:opacity-50">Toggle role</button>
-                        <button type="button" disabled={isAdminSaving === entry.id} onClick={() => void updateUser(entry.id, { isActive: !entry.isActive })} className="rounded-full border border-[rgba(214,162,79,0.2)] px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-[#f6e7be] disabled:opacity-50">{entry.isActive ? "Pause access" : "Restore access"}</button>
-                      </div>
-                      <div className="mt-3 text-[11px] uppercase tracking-[0.24em] text-[rgba(243,231,192,0.48)]">Last sign-in {formatTimestamp(entry.lastSignedIn)}</div>
-                    </article>
+                  {historySessions.map((entry) => (
+                    <button
+                      key={entry.sessionId}
+                      type="button"
+                      onClick={() => void handleSelectSession(entry.sessionId)}
+                      className={`w-full rounded-[1.2rem] border p-3 text-left transition ${entry.sessionId === sessionId ? "border-[rgba(214,162,79,0.42)] bg-[rgba(214,162,79,0.08)]" : "border-[rgba(214,162,79,0.12)] bg-black/20 hover:border-[rgba(214,162,79,0.3)]"}`}
+                    >
+                      <div className="text-xs uppercase tracking-[0.28em] text-[rgba(214,162,79,0.72)]">{entry.turnCount} turns</div>
+                      <div className="mt-2 text-sm font-semibold text-[#f7ebc8]">{entry.title}</div>
+                      <p className="mt-2 text-xs leading-6 text-[rgba(243,231,192,0.68)]">{entry.matchedText ?? entry.summary ?? "No summary yet."}</p>
+                      <div className="mt-2 text-[11px] uppercase tracking-[0.24em] text-[rgba(243,231,192,0.48)]">{formatTimestamp(entry.updatedAt)}</div>
+                    </button>
                   ))}
                 </div>
               </section>
-            ) : null}
-            {historyError ? <p className="rounded-[1.25rem] border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-200">{historyError}</p> : null}
-          </aside>
-        </section>
+
+              <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">
+                  <Shield className="h-4 w-4" />
+                  Cross-session memory
+                </div>
+                <div className="mt-4 space-y-3">
+                  {insights.length === 0 ? (
+                    <p className="text-sm leading-7 text-[rgba(243,231,192,0.68)]">As new sessions close, METIS will surface reusable summaries here so Orion can recall prior bets and tensions quickly.</p>
+                  ) : (
+                    insights.map((entry) => (
+                      <article key={entry.id} className="rounded-[1.35rem] border border-[rgba(214,162,79,0.14)] bg-black/20 p-4">
+                        <div className="text-xs uppercase tracking-[0.28em] text-[rgba(214,162,79,0.72)]">{entry.tags.join(" · ") || "Reusable insight"}</div>
+                        <div className="mt-2 font-semibold text-[#f7ebc8]">{entry.title}</div>
+                        <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.72)]">{entry.insight}</p>
+                        {entry.rationale ? <p className="mt-3 text-xs leading-6 text-[rgba(243,231,192,0.56)]">{entry.rationale}</p> : null}
+                      </article>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
+                <div className="text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">Selected session transcript</div>
+                <div className="mt-4 space-y-4 max-h-[28rem] overflow-y-auto pr-1">
+                  {historyTurns.length === 0 ? (
+                    <p className="text-sm leading-7 text-[rgba(243,231,192,0.68)]">Choose a prior session from the history rail to inspect the full council turns.</p>
+                  ) : (
+                    historyTurns.map((turn, index) => <CouncilTurnCard key={`${turn.sessionId}-${turn.createdAt}-${index}`} turn={turn} turnIndex={index} />)
+                  )}
+                </div>
+              </section>
+
+              {userRole === "admin" ? (
+                <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">
+                    <Users className="h-4 w-4" />
+                    User administration
+                  </div>
+                  <form onSubmit={handleCreateUser} className="mt-4 grid gap-3">
+                    <input value={newUser.username} onChange={(event) => setNewUser((current) => ({ ...current, username: event.target.value }))} placeholder="Username" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
+                    <input value={newUser.name} onChange={(event) => setNewUser((current) => ({ ...current, name: event.target.value }))} placeholder="Display name" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
+                    <input value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} placeholder="Email" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
+                    <input value={newUser.password} onChange={(event) => setNewUser((current) => ({ ...current, password: event.target.value }))} placeholder="Temporary password" type="password" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
+                    <select value={newUser.role} onChange={(event) => setNewUser((current) => ({ ...current, role: event.target.value as "user" | "admin" }))} className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]">
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <button type="submit" className="rounded-full bg-[#d6a24f] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#140d05]">Create user</button>
+                  </form>
+                  <div className="mt-4 space-y-3">
+                    {adminUsers.map((entry) => (
+                      <article key={entry.id} className="rounded-[1.2rem] border border-[rgba(214,162,79,0.12)] bg-black/20 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-[#f7ebc8]">{entry.name || entry.username || `User ${entry.id}`}</div>
+                            <div className="mt-1 text-xs uppercase tracking-[0.24em] text-[rgba(243,231,192,0.5)]">{entry.username ?? "No username"} · {entry.email ?? "No email"}</div>
+                          </div>
+                          <div className="text-[11px] uppercase tracking-[0.24em] text-[rgba(214,162,79,0.72)]">{entry.role} · {entry.isActive ? "active" : "paused"}</div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button type="button" disabled={isAdminSaving === entry.id} onClick={() => void updateUser(entry.id, { role: entry.role === "admin" ? "user" : "admin" })} className="rounded-full border border-[rgba(214,162,79,0.2)] px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-[#f6e7be] disabled:opacity-50">Toggle role</button>
+                          <button type="button" disabled={isAdminSaving === entry.id} onClick={() => void updateUser(entry.id, { isActive: !entry.isActive })} className="rounded-full border border-[rgba(214,162,79,0.2)] px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-[#f6e7be] disabled:opacity-50">{entry.isActive ? "Pause access" : "Restore access"}</button>
+                        </div>
+                        <div className="mt-3 text-[11px] uppercase tracking-[0.24em] text-[rgba(243,231,192,0.48)]">Last sign-in {formatTimestamp(entry.lastSignedIn)}</div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+              {historyError ? <p className="rounded-[1.25rem] border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-200">{historyError}</p> : null}
+            </aside>
+          </section>
+        ) : (
+          <section className="grid gap-4 xl:grid-cols-[0.95fr_1.8fr_1.05fr]">
+            <aside className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
+              <div className="mb-4 text-xs uppercase tracking-[0.4em] text-[rgba(214,162,79,0.75)]">Council Members</div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                {Object.entries(metisAgentProfiles).map(([name, profile]) => (
+                  <article key={name} className={`rounded-[1.5rem] border bg-black/25 p-4 ${profile.borderClassName} ${profile.glowClassName}`}>
+                    <div className={`text-xs uppercase tracking-[0.35em] ${profile.accentClassName}`}>{name}</div>
+                    <div className="mt-2 font-serif text-2xl text-[#f7ebc8]">{profile.title}</div>
+                    <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.72)]">{profile.description}</p>
+                  </article>
+                ))}
+              </div>
+
+              <div className="mt-6 rounded-[1.5rem] border border-[rgba(214,162,79,0.18)] bg-black/20 p-4">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">
+                  <Search className="h-4 w-4" />
+                  Session history
+                </div>
+                <form onSubmit={handleHistorySearch} className="mt-4 space-y-3">
+                  <input
+                    value={historyQuery}
+                    onChange={(event) => setHistoryQuery(event.target.value)}
+                    placeholder="Search sessions, summaries, or transcript text"
+                    className="w-full rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8] placeholder:text-[rgba(214,162,79,0.42)]"
+                  />
+                  <button type="submit" className="w-full rounded-full border border-[rgba(214,162,79,0.2)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#f6e7be] transition hover:border-[rgba(214,162,79,0.42)]">
+                    {isHistoryLoading ? "Searching" : "Search history"}
+                  </button>
+                </form>
+                <div className="mt-4 space-y-3">
+                  {historySessions.map((entry) => (
+                    <button
+                      key={entry.sessionId}
+                      type="button"
+                      onClick={() => void handleSelectSession(entry.sessionId)}
+                      className={`w-full rounded-[1.2rem] border p-3 text-left transition ${entry.sessionId === sessionId ? "border-[rgba(214,162,79,0.42)] bg-[rgba(214,162,79,0.08)]" : "border-[rgba(214,162,79,0.12)] bg-black/20 hover:border-[rgba(214,162,79,0.3)]"}`}
+                    >
+                      <div className="text-xs uppercase tracking-[0.28em] text-[rgba(214,162,79,0.72)]">{entry.turnCount} turns</div>
+                      <div className="mt-2 text-sm font-semibold text-[#f7ebc8]">{entry.title}</div>
+                      <p className="mt-2 text-xs leading-6 text-[rgba(243,231,192,0.68)]">{entry.matchedText ?? entry.summary ?? "No summary yet."}</p>
+                      <div className="mt-2 text-[11px] uppercase tracking-[0.24em] text-[rgba(243,231,192,0.48)]">{formatTimestamp(entry.updatedAt)}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+
+            <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
+              <div className="flex min-h-[65vh] flex-col gap-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.4em] text-[rgba(214,162,79,0.75)]">Live Council Transcript</div>
+                    {activeSessionPreview ? (
+                      <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.68)]">{activeSessionPreview.summary ?? "This session summary will appear after Metis synthesises."}</p>
+                    ) : null}
+                  </div>
+                  {isStreaming ? (
+                    <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-[rgba(243,231,192,0.6)]">
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                      {activePrompt ? "Deliberation in progress" : "Streaming"}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
+                  {messages.length === 0 ? (
+                    <div className="rounded-[1.5rem] border border-dashed border-[rgba(214,162,79,0.22)] bg-black/20 p-6 text-sm leading-7 text-[rgba(243,231,192,0.68)]">
+                      Submit the first brief to convene the council. Metis will open the meeting, the selected members will answer in sequence, and Orion can redirect the room while it is still live.
+                    </div>
+                  ) : (
+                    messages.map((entry) => {
+                      const visuals = getMessageVisuals(entry);
+                      return (
+                        <div key={entry.id} className={`flex w-full ${entry.role === "user" ? "justify-end" : "justify-start"}`}>
+                          <article className={`w-full ${entry.role === "user" ? "max-w-4xl" : "max-w-5xl"} rounded-[1.5rem] border p-4 shadow-[0_0_32px_rgba(0,0,0,0.18)] ${visuals.containerClassName}`}>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className={`text-xs uppercase tracking-[0.32em] ${visuals.accentClassName}`}>{entry.speakerName}</div>
+                                <div className="mt-1 text-[11px] uppercase tracking-[0.26em] text-[rgba(243,231,192,0.48)]">{visuals.metaLabel}</div>
+                              </div>
+                              {entry.role !== "user" ? (
+                                <div className="text-right text-[11px] uppercase tracking-[0.24em] text-[rgba(214,162,79,0.72)]">
+                                  {typeof entry.confidence === "number" ? <div>Confidence {Math.round(entry.confidence * 100)}%</div> : null}
+                                  {entry.recommendedAction ? <div className="mt-1">Action {formatRecommendedAction(entry.recommendedAction)}</div> : null}
+                                </div>
+                              ) : null}
+                            </div>
+                            <CouncilRichText content={entry.content} className="mt-4" />
+                            {entry.summaryRationale ? <p className="mt-4 text-xs leading-6 text-[rgba(243,231,192,0.68)]">{entry.summaryRationale}</p> : null}
+                          </article>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={transcriptEndRef} />
+                </div>
+
+                <form onSubmit={handleSubmit} className="mt-2 rounded-[1.75rem] border border-[rgba(214,162,79,0.18)] bg-black/20 p-4">
+                  <label htmlFor="council-brief" className="text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.75)]">
+                    {hasLiveSession ? "Interject now" : "New brief"}
+                  </label>
+                  <textarea
+                    id="council-brief"
+                    value={message}
+                    onChange={(event) => setMessage(event.target.value)}
+                    placeholder={hasLiveSession ? "Interrupt the room with a correction, challenge, or new instruction for Orion's council." : "Ask the council to debate a strategy, architecture, campaign, or product decision."}
+                    className="mt-3 min-h-28 w-full resize-none rounded-[1.2rem] border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-4 text-sm leading-7 text-[#f7ebc8] placeholder:text-[rgba(214,162,79,0.42)]"
+                  />
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-xs leading-6 text-[rgba(243,231,192,0.62)]">The transcript behaves like a live room. Orion’s message appears immediately, each council response arrives incrementally, and you can stop the current run before sending a redirect.</div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {isStreaming ? (
+                        <button type="button" onClick={handleStop} className="inline-flex items-center justify-center gap-2 rounded-full border border-[rgba(214,162,79,0.26)] px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#f6e7be] transition hover:border-[rgba(214,162,79,0.46)]">
+                          <Square className="h-4 w-4" />
+                          Stop run
+                        </button>
+                      ) : null}
+                      <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#d6a24f] px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#140d05] transition hover:bg-[#e0b163]">
+                        <SendHorizontal className="h-4 w-4" />
+                        {hasLiveSession ? "Send interjection" : "Convene council"}
+                      </button>
+                    </div>
+                  </div>
+                  {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+                </form>
+              </div>
+            </section>
+
+            <aside className="space-y-4">
+              <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">
+                  <Shield className="h-4 w-4" />
+                  Cross-session memory
+                </div>
+                <div className="mt-4 space-y-3">
+                  {insights.length === 0 ? (
+                    <p className="text-sm leading-7 text-[rgba(243,231,192,0.68)]">As new sessions close, METIS will surface reusable summaries here so Orion can recall prior bets and tensions quickly.</p>
+                  ) : (
+                    insights.map((entry) => (
+                      <article key={entry.id} className="rounded-[1.35rem] border border-[rgba(214,162,79,0.14)] bg-black/20 p-4">
+                        <div className="text-xs uppercase tracking-[0.28em] text-[rgba(214,162,79,0.72)]">{entry.tags.join(" · ") || "Reusable insight"}</div>
+                        <div className="mt-2 font-semibold text-[#f7ebc8]">{entry.title}</div>
+                        <p className="mt-2 text-sm leading-6 text-[rgba(243,231,192,0.72)]">{entry.insight}</p>
+                        {entry.rationale ? <p className="mt-3 text-xs leading-6 text-[rgba(243,231,192,0.56)]">{entry.rationale}</p> : null}
+                      </article>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
+                <div className="text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">Selected session transcript</div>
+                <div className="mt-4 space-y-4 max-h-[28rem] overflow-y-auto pr-1">
+                  {historyTurns.length === 0 ? (
+                    <p className="text-sm leading-7 text-[rgba(243,231,192,0.68)]">Choose a prior session from the history rail to inspect the full council turns.</p>
+                  ) : (
+                    historyTurns.map((turn, index) => <CouncilTurnCard key={`${turn.sessionId}-${turn.createdAt}-${index}`} turn={turn} turnIndex={index} />)
+                  )}
+                </div>
+              </section>
+
+              {userRole === "admin" ? (
+                <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">
+                    <Users className="h-4 w-4" />
+                    User administration
+                  </div>
+                  <form onSubmit={handleCreateUser} className="mt-4 grid gap-3">
+                    <input value={newUser.username} onChange={(event) => setNewUser((current) => ({ ...current, username: event.target.value }))} placeholder="Username" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
+                    <input value={newUser.name} onChange={(event) => setNewUser((current) => ({ ...current, name: event.target.value }))} placeholder="Display name" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
+                    <input value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} placeholder="Email" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
+                    <input value={newUser.password} onChange={(event) => setNewUser((current) => ({ ...current, password: event.target.value }))} placeholder="Temporary password" type="password" className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]" />
+                    <select value={newUser.role} onChange={(event) => setNewUser((current) => ({ ...current, role: event.target.value as "user" | "admin" }))} className="rounded-full border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm text-[#f7ebc8]">
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <button type="submit" className="rounded-full bg-[#d6a24f] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#140d05]">Create user</button>
+                  </form>
+                  <div className="mt-4 space-y-3">
+                    {adminUsers.map((entry) => (
+                      <article key={entry.id} className="rounded-[1.2rem] border border-[rgba(214,162,79,0.12)] bg-black/20 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-[#f7ebc8]">{entry.name || entry.username || `User ${entry.id}`}</div>
+                            <div className="mt-1 text-xs uppercase tracking-[0.24em] text-[rgba(243,231,192,0.5)]">{entry.username ?? "No username"} · {entry.email ?? "No email"}</div>
+                          </div>
+                          <div className="text-[11px] uppercase tracking-[0.24em] text-[rgba(214,162,79,0.72)]">{entry.role} · {entry.isActive ? "active" : "paused"}</div>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button type="button" disabled={isAdminSaving === entry.id} onClick={() => void updateUser(entry.id, { role: entry.role === "admin" ? "user" : "admin" })} className="rounded-full border border-[rgba(214,162,79,0.2)] px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-[#f6e7be] disabled:opacity-50">Toggle role</button>
+                          <button type="button" disabled={isAdminSaving === entry.id} onClick={() => void updateUser(entry.id, { isActive: !entry.isActive })} className="rounded-full border border-[rgba(214,162,79,0.2)] px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-[#f6e7be] disabled:opacity-50">{entry.isActive ? "Pause access" : "Restore access"}</button>
+                        </div>
+                        <div className="mt-3 text-[11px] uppercase tracking-[0.24em] text-[rgba(243,231,192,0.48)]">Last sign-in {formatTimestamp(entry.lastSignedIn)}</div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+              {historyError ? <p className="rounded-[1.25rem] border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-200">{historyError}</p> : null}
+            </aside>
+          </section>
+        )}
       </div>
     </main>
   );
 }
+
