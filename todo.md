@@ -70,3 +70,13 @@
 - [x] Commit and push the latest METIS chaired-discussion and Orion-accountability changes to GitHub so Vercel can deploy them
 - [x] Verify that the Vercel-backed metis.ooo deployment picks up the new framing after the GitHub push
 - [x] Submit a live council brief on metis.ooo after the Vercel deployment updates and confirm the transcript reflects distinct-contribution framing and accountability to Orion
+- [x] Implement streaming API endpoint that yields council messages in real-time as agents respond
+- [x] Update CouncilInterface UI to consume streaming messages and render them incrementally
+- [x] Add interjection UI component allowing Orion to send messages mid-discussion
+- [x] Implement interjection logic to inject Orion's message into the active council turn
+- [x] Write vitest tests for streaming endpoint and interjection flow
+- [x] Verify real-time chat experience on local dev server
+- [ ] Verify real-time chat and interjection on live metis.ooo deployment
+- [x] Fix the council composer submit control so live streaming starts reliably without accidental page navigation during browser use
+- [ ] Re-run browser verification after the submit regression fix and confirm streaming plus Orion interjection work end to end
+- [x] Fix the council streaming route so aborted readers do not attempt to enqueue after the NDJSON controller has been closed

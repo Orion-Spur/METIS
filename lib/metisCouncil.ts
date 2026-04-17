@@ -4,6 +4,7 @@ import type {
   MetisAgentOutput,
   MetisCouncilMessage,
   MetisCouncilTurn,
+  MetisRecommendedAction,
 } from "@/shared/metis";
 
 const recommendedActions = [
@@ -28,6 +29,103 @@ const chairPrompt =
 
 const synthesisPrompt =
   "You are Metis, chair of the METIS council. Produce the closing synthesis after the live discussion. Integrate the strongest arguments from the distinct contributors in the room, preserve important disagreement, make the council's accountability to Orion clear through disciplined reasoning, and end with one decisive recommended next action.";
+
+export type CouncilContextEntry = {
+  role: "user" | "agent" | "synthesis";
+  speakerName: MetisAgentName | "Orion";
+  content: string;
+  sequenceOrder: number;
+  confidence?: number;
+  recommendedAction?: MetisRecommendedAction;
+  summaryRationale?: string;
+};
+
+type CouncilPlanStep = {
+  kind: "discussion" | "synthesis";
+  agentName: MetisAgentName;
+  systemPrompt: string;
+  stageDirection: string;
+};
+
+export type StreamedCouncilEvent = {
+  kind: "discussion" | "synthesis";
+  message: MetisCouncilMessage;
+};
+
+export type StreamCouncilTurnResult = {
+  sessionId: string;
+  userMessage: string;
+  discussion: MetisCouncilMessage[];
+  synthesis: MetisCouncilMessage | null;
+  createdAt: number;
+  completed: boolean;
+};
+
+const councilPlan: CouncilPlanStep[] = [
+  {
+    kind: "discussion",
+    agentName: "Metis",
+    systemPrompt: chairPrompt,
+    stageDirection:
+      "Open the meeting. Restate the brief, identify the central decision tension, remind the room that each member was selected for a distinct contribution and is answerable to Orion, then assign the first pass: Athena should shape the path, Argus should test the assumptions, and Loki should attack the weak points. Do not close the discussion.",
+  },
+  {
+    kind: "discussion",
+    agentName: "Athena",
+    systemPrompt: specialistPrompts.Athena,
+    stageDirection:
+      "Deliver the opening strategic position. Propose a practical path forward and acknowledge the central tension Metis named.",
+  },
+  {
+    kind: "discussion",
+    agentName: "Argus",
+    systemPrompt: specialistPrompts.Argus,
+    stageDirection:
+      "Respond after reading the chair opening and Athena's position. Validate or challenge the assumptions, identify missing evidence, and sharpen the decision criteria.",
+  },
+  {
+    kind: "discussion",
+    agentName: "Loki",
+    systemPrompt: specialistPrompts.Loki,
+    stageDirection:
+      "Respond after reading the prior speakers. Attack the weakest assumption on the table, expose the most serious execution risk, and make the debate more adversarial and concrete.",
+  },
+  {
+    kind: "discussion",
+    agentName: "Metis",
+    systemPrompt: chairPrompt,
+    stageDirection:
+      "Chair the midpoint of the meeting. Name the most important unresolved tension created by the discussion so far, explicitly reference at least two specialists, and demand sharper closing positions. Do not synthesize the final answer yet.",
+  },
+  {
+    kind: "discussion",
+    agentName: "Athena",
+    systemPrompt: specialistPrompts.Athena,
+    stageDirection:
+      "Revise or defend your strategy after the midpoint intervention. Address at least one criticism by name and tighten the proposed path or sequencing.",
+  },
+  {
+    kind: "discussion",
+    agentName: "Argus",
+    systemPrompt: specialistPrompts.Argus,
+    stageDirection:
+      "Assess whether the revised path now meets an acceptable evidence threshold. Address at least one prior speaker by name and state what still remains uncertain.",
+  },
+  {
+    kind: "discussion",
+    agentName: "Loki",
+    systemPrompt: specialistPrompts.Loki,
+    stageDirection:
+      "Deliver the closing stress test before the chair synthesizes. Address at least one prior claim by name and identify the failure mode that still matters most.",
+  },
+  {
+    kind: "synthesis",
+    agentName: "Metis",
+    systemPrompt: synthesisPrompt,
+    stageDirection:
+      "Close the meeting. Summarize the strongest points of agreement, preserve the most useful disagreement, and end with one clear recommended next action.",
+  },
+];
 
 function extractJson(text: string) {
   const trimmed = text.trim();
@@ -63,29 +161,34 @@ function normaliseOutput(agentName: MetisAgentName, rawText: string): MetisAgent
   };
 }
 
-function formatTranscript(discussion: MetisCouncilMessage[]) {
+function formatTranscript(discussion: CouncilContextEntry[]) {
   if (discussion.length === 0) {
     return "No prior council discussion yet.";
   }
 
   return discussion
-    .map(
-      (message) =>
-        `${message.sequenceOrder}. ${message.agentName} | confidence ${Math.round(message.confidence * 100)}% | action ${message.recommendedAction}\n${message.content}\nRationale: ${message.summaryRationale}`,
-    )
+    .map((message) => {
+      if (message.role === "user") {
+        return `${message.sequenceOrder}. Orion\n${message.content}`;
+      }
+
+      return `${message.sequenceOrder}. ${message.speakerName} | confidence ${Math.round(
+        (message.confidence ?? 0) * 100,
+      )}% | action ${message.recommendedAction ?? "request_clarification"}\n${message.content}\nRationale: ${message.summaryRationale ?? "No rationale returned."}`;
+    })
     .join("\n\n");
 }
 
 function buildStructuredPrompt(input: {
-  agentName: MetisAgentName;
   brief: string;
   stageDirection: string;
-  discussion: MetisCouncilMessage[];
+  discussion: CouncilContextEntry[];
   finalSynthesis?: boolean;
 }) {
+  const priorAgentMessages = input.discussion.filter((entry) => entry.role !== "user").length;
   const engagementInstruction =
-    input.discussion.length > 0
-      ? "Reference at least one earlier speaker by name and respond to their reasoning directly."
+    priorAgentMessages > 0
+      ? "Reference at least one earlier speaker by name and respond to their reasoning directly. If Orion has interjected, address the latest Orion intervention explicitly."
       : "Establish the first substantive position in the meeting rather than introducing yourself or using a fixed role label.";
 
   const contentInstruction = input.finalSynthesis
@@ -264,126 +367,133 @@ function asDiscussionMessage(output: MetisAgentOutput, sequenceOrder: number): M
   };
 }
 
-async function addDiscussionMessage(input: {
-  discussion: MetisCouncilMessage[];
-  agentName: MetisAgentName;
-  systemPrompt: string;
-  brief: string;
-  stageDirection: string;
-}) {
-  const output = await invokeAgent(
-    input.agentName,
-    input.systemPrompt,
-    buildStructuredPrompt({
-      agentName: input.agentName,
-      brief: input.brief,
-      stageDirection: input.stageDirection,
-      discussion: input.discussion,
-    }),
-  );
-
-  return [...input.discussion, asDiscussionMessage(output, input.discussion.length + 1)];
+function toContextEntry(
+  message: MetisCouncilMessage,
+  role: "agent" | "synthesis",
+  sequenceOrder: number,
+): CouncilContextEntry {
+  return {
+    role,
+    speakerName: message.agentName,
+    content: message.content,
+    sequenceOrder,
+    confidence: message.confidence,
+    recommendedAction: message.recommendedAction,
+    summaryRationale: message.summaryRationale,
+  };
 }
 
-export async function orchestrateCouncilTurn(input: {
+export function flattenTurnsToContextEntries(turns: MetisCouncilTurn[]): CouncilContextEntry[] {
+  let sequenceOrder = 0;
+
+  return turns.flatMap((turn) => {
+    const entries: CouncilContextEntry[] = [
+      {
+        role: "user",
+        speakerName: "Orion",
+        content: turn.userMessage,
+        sequenceOrder: ++sequenceOrder,
+      },
+    ];
+
+    for (const message of turn.discussion) {
+      entries.push(toContextEntry(message, "agent", ++sequenceOrder));
+    }
+
+    entries.push(toContextEntry(turn.synthesis, "synthesis", ++sequenceOrder));
+    return entries;
+  });
+}
+
+export async function streamCouncilTurn(input: {
   sessionId: string;
   userMessage: string;
-}): Promise<MetisCouncilTurn> {
-  let discussion: MetisCouncilMessage[] = [];
+  history?: MetisCouncilTurn[];
+  historyEntries?: CouncilContextEntry[];
+  onEvent?: (event: StreamedCouncilEvent) => Promise<void> | void;
+  shouldStop?: () => Promise<boolean> | boolean;
+}): Promise<StreamCouncilTurnResult> {
+  const createdAt = Date.now();
+  const discussion: MetisCouncilMessage[] = [];
+  let synthesis: MetisCouncilMessage | null = null;
+  let contextSequence = input.historyEntries ?? flattenTurnsToContextEntries(input.history ?? []);
 
-  discussion = await addDiscussionMessage({
-    discussion,
-    agentName: "Metis",
-    systemPrompt: chairPrompt,
-    brief: input.userMessage,
-    stageDirection:
-      "Open the meeting. Restate the brief, identify the central decision tension, remind the room that each member was selected for a distinct contribution and is answerable to Orion, then assign the first pass: Athena should shape the path, Argus should test the assumptions, and Loki should attack the weak points. Do not close the discussion.",
-  });
+  contextSequence = [
+    ...contextSequence,
+    {
+      role: "user",
+      speakerName: "Orion",
+      content: input.userMessage,
+      sequenceOrder: contextSequence.length + 1,
+    },
+  ];
 
-  discussion = await addDiscussionMessage({
-    discussion,
-    agentName: "Athena",
-    systemPrompt: specialistPrompts.Athena,
-    brief: input.userMessage,
-    stageDirection:
-      "Deliver the opening strategic position. Propose a practical path forward and acknowledge the central tension Metis named.",
-  });
-
-  discussion = await addDiscussionMessage({
-    discussion,
-    agentName: "Argus",
-    systemPrompt: specialistPrompts.Argus,
-    brief: input.userMessage,
-    stageDirection:
-      "Respond after reading the chair opening and Athena's position. Validate or challenge the assumptions, identify missing evidence, and sharpen the decision criteria.",
-  });
-
-  discussion = await addDiscussionMessage({
-    discussion,
-    agentName: "Loki",
-    systemPrompt: specialistPrompts.Loki,
-    brief: input.userMessage,
-    stageDirection:
-      "Respond after reading the prior speakers. Attack the weakest assumption on the table, expose the most serious execution risk, and make the debate more adversarial and concrete.",
-  });
-
-  discussion = await addDiscussionMessage({
-    discussion,
-    agentName: "Metis",
-    systemPrompt: chairPrompt,
-    brief: input.userMessage,
-    stageDirection:
-      "Chair the midpoint of the meeting. Name the most important unresolved tension created by the discussion so far, explicitly reference at least two specialists, and demand sharper closing positions. Do not synthesize the final answer yet.",
-  });
-
-  discussion = await addDiscussionMessage({
-    discussion,
-    agentName: "Athena",
-    systemPrompt: specialistPrompts.Athena,
-    brief: input.userMessage,
-    stageDirection:
-      "Revise or defend your strategy after the midpoint intervention. Address at least one criticism by name and tighten the proposed path or sequencing.",
-  });
-
-  discussion = await addDiscussionMessage({
-    discussion,
-    agentName: "Argus",
-    systemPrompt: specialistPrompts.Argus,
-    brief: input.userMessage,
-    stageDirection:
-      "Assess whether the revised path now meets an acceptable evidence threshold. Address at least one prior speaker by name and state what still remains uncertain.",
-  });
-
-  discussion = await addDiscussionMessage({
-    discussion,
-    agentName: "Loki",
-    systemPrompt: specialistPrompts.Loki,
-    brief: input.userMessage,
-    stageDirection:
-      "Deliver the closing stress test before the chair synthesizes. Address at least one prior claim by name and identify the failure mode that still matters most.",
-  });
-
-  const synthesis = asDiscussionMessage(
-    await invokeAgent(
-      "Metis",
-      synthesisPrompt,
-      buildStructuredPrompt({
-        agentName: "Metis",
-        brief: input.userMessage,
-        stageDirection:
-          "Close the meeting. Summarize the strongest points of agreement, preserve the most useful disagreement, and end with one clear recommended next action.",
+  for (const step of councilPlan) {
+    if ((await input.shouldStop?.()) === true) {
+      return {
+        sessionId: input.sessionId,
+        userMessage: input.userMessage,
         discussion,
-        finalSynthesis: true,
+        synthesis,
+        createdAt,
+        completed: false,
+      };
+    }
+
+    const output = await invokeAgent(
+      step.agentName,
+      step.systemPrompt,
+      buildStructuredPrompt({
+        brief: input.userMessage,
+        stageDirection: step.stageDirection,
+        discussion: contextSequence,
+        finalSynthesis: step.kind === "synthesis",
       }),
-    ),
-    discussion.length + 1,
-  );
+    );
+
+    const message = asDiscussionMessage(output, discussion.length + (step.kind === "synthesis" ? 1 : 1));
+
+    if (step.kind === "discussion") {
+      discussion.push(message);
+      contextSequence.push(toContextEntry(message, "agent", contextSequence.length + 1));
+    } else {
+      synthesis = message;
+      contextSequence.push(toContextEntry(message, "synthesis", contextSequence.length + 1));
+    }
+
+    await input.onEvent?.({ kind: step.kind, message });
+  }
 
   return {
     sessionId: input.sessionId,
     userMessage: input.userMessage,
     discussion,
     synthesis,
-    createdAt: Date.now(),
+    createdAt,
+    completed: true,
+  };
+}
+
+export async function orchestrateCouncilTurn(input: {
+  sessionId: string;
+  userMessage: string;
+  history?: MetisCouncilTurn[];
+}): Promise<MetisCouncilTurn> {
+  const result = await streamCouncilTurn({
+    sessionId: input.sessionId,
+    userMessage: input.userMessage,
+    history: input.history,
+  });
+
+  if (!result.synthesis) {
+    throw new Error("The METIS council turn was interrupted before synthesis.");
+  }
+
+  return {
+    sessionId: result.sessionId,
+    userMessage: result.userMessage,
+    discussion: result.discussion,
+    synthesis: result.synthesis,
+    createdAt: result.createdAt,
   };
 }

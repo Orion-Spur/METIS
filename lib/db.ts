@@ -243,25 +243,35 @@ export async function getOrCreateSession(existingSessionId: string | undefined, 
   return session;
 }
 
-export async function persistCouncilTurn(input: {
+async function touchSession(sessionId: string) {
+  const db = getDb();
+
+  await db
+    .update(councilSessions)
+    .set({
+      lastMessageAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(councilSessions.id, sessionId));
+}
+
+export async function startCouncilSessionTurn(input: {
   sessionId?: string;
   userId?: number;
   username: string;
   userMessage: string;
-  discussion: MetisCouncilMessage[];
-  synthesis: MetisCouncilMessage;
 }) {
   const db = getDb();
   const session = await getOrCreateSession(input.sessionId, {
     id: input.userId,
     username: input.username,
   });
-  let sequenceOrder = await getNextSequenceOrder(session.id);
+  const sequenceOrder = (await getNextSequenceOrder(session.id)) + 1;
 
   await db.insert(councilMessages).values({
     id: nanoid(20),
     sessionId: session.id,
-    sequenceOrder: ++sequenceOrder,
+    sequenceOrder,
     role: "user",
     agentName: null,
     content: input.userMessage,
@@ -271,44 +281,73 @@ export async function persistCouncilTurn(input: {
     createdAt: new Date(),
   });
 
-  for (const message of input.discussion) {
-    await db.insert(councilMessages).values({
-      id: nanoid(20),
-      sessionId: session.id,
-      sequenceOrder: ++sequenceOrder,
-      role: "agent",
-      agentName: message.agentName,
-      content: message.content,
-      confidence: message.confidence.toFixed(2),
-      recommendedAction: message.recommendedAction,
-      summaryRationale: message.summaryRationale,
-      createdAt: new Date(),
-    });
-  }
-
-  await db.insert(councilMessages).values({
-    id: nanoid(20),
-    sessionId: session.id,
-    sequenceOrder: ++sequenceOrder,
-    role: "synthesis",
-    agentName: input.synthesis.agentName,
-    content: input.synthesis.content,
-    confidence: input.synthesis.confidence.toFixed(2),
-    recommendedAction: input.synthesis.recommendedAction,
-    summaryRationale: input.synthesis.summaryRationale,
-    createdAt: new Date(),
-  });
-
-  await db
-    .update(councilSessions)
-    .set({
-      lastMessageAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(councilSessions.id, session.id));
+  await touchSession(session.id);
 
   return {
     sessionId: session.id,
+    sequenceOrder,
+  };
+}
+
+export async function appendCouncilMessage(input: {
+  sessionId: string;
+  role: "agent" | "synthesis";
+  message: MetisCouncilMessage;
+}) {
+  const db = getDb();
+  const sequenceOrder = (await getNextSequenceOrder(input.sessionId)) + 1;
+
+  await db.insert(councilMessages).values({
+    id: nanoid(20),
+    sessionId: input.sessionId,
+    sequenceOrder,
+    role: input.role,
+    agentName: input.message.agentName,
+    content: input.message.content,
+    confidence: input.message.confidence.toFixed(2),
+    recommendedAction: input.message.recommendedAction,
+    summaryRationale: input.message.summaryRationale,
+    createdAt: new Date(),
+  });
+
+  await touchSession(input.sessionId);
+
+  return {
+    sequenceOrder,
+  };
+}
+
+export async function persistCouncilTurn(input: {
+  sessionId?: string;
+  userId?: number;
+  username: string;
+  userMessage: string;
+  discussion: MetisCouncilMessage[];
+  synthesis: MetisCouncilMessage;
+}) {
+  const started = await startCouncilSessionTurn({
+    sessionId: input.sessionId,
+    userId: input.userId,
+    username: input.username,
+    userMessage: input.userMessage,
+  });
+
+  for (const message of input.discussion) {
+    await appendCouncilMessage({
+      sessionId: started.sessionId,
+      role: "agent",
+      message,
+    });
+  }
+
+  await appendCouncilMessage({
+    sessionId: started.sessionId,
+    role: "synthesis",
+    message: input.synthesis,
+  });
+
+  return {
+    sessionId: started.sessionId,
   };
 }
 

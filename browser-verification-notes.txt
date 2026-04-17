@@ -1,0 +1,7 @@
+Browser verification notes for live council streaming:
+- Login flow to /council works with Orion admin credentials.
+- The council page loads and shows the updated live-room copy.
+- Browser automation textarea entry appears to update the DOM value, but the subsequent button click does not produce a visible transcript update or a /api/council network request.
+- DOM inspection shows the council button is now type="button", which confirms the accidental native form post regression was fixed.
+- The current blocker appears to be browser automation not reliably driving the React-controlled textarea state on this page, rather than the previous native form submission path.
+- Focused Vitest coverage for council streaming and route NDJSON events passes locally.
