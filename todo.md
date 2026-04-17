@@ -127,3 +127,4 @@
 - [x] Add runtime enforcement that truncates or rejects overlong council outputs instead of only reformatting them after generation
 - [x] Implement explicit round-state tracking so Metis cannot synthesize until the full challenge round is complete across the planned sequence
 - [x] Add focused tests proving compact runtime enforcement and full-round gating beyond the current Loki-count check
+- [x] Create a living context document capturing METIS architecture, development history, deployment flow, operational state, and known issues for future work
