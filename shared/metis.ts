@@ -29,6 +29,38 @@ export type MetisCouncilTurn = {
   createdAt: number;
 };
 
+export type MetisSessionPreview = {
+  sessionId: string;
+  title: string;
+  summary: string | null;
+  updatedAt: number;
+  createdAt: number;
+  lastMessageAt: number;
+  turnCount: number;
+  matchedText: string | null;
+};
+
+export type MetisSessionInsight = {
+  id: number;
+  sessionId: string;
+  title: string;
+  insight: string;
+  rationale: string | null;
+  tags: string[];
+  updatedAt: number;
+};
+
+export type MetisUserAdminRecord = {
+  id: number;
+  username: string | null;
+  email: string | null;
+  name: string | null;
+  role: "user" | "admin";
+  isActive: boolean;
+  lastSignedIn: number;
+  createdAt: number;
+};
+
 export const metisAgentProfiles: Record<
   MetisAgentName,
   {

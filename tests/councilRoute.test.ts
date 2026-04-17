@@ -1,6 +1,8 @@
 const getCurrentSession = vi.fn();
 const appendCouncilMessage = vi.fn();
 const listCouncilTurns = vi.fn();
+const listRelevantSessionInsights = vi.fn();
+const refreshSessionInsight = vi.fn();
 const startCouncilSessionTurn = vi.fn();
 const streamCouncilTurn = vi.fn();
 const flattenTurnsToContextEntries = vi.fn();
@@ -12,6 +14,8 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/db", () => ({
   appendCouncilMessage,
   listCouncilTurns,
+  listRelevantSessionInsights,
+  refreshSessionInsight,
   startCouncilSessionTurn,
 }));
 
@@ -30,6 +34,8 @@ describe("METIS streaming council route", () => {
     getCurrentSession.mockReset();
     appendCouncilMessage.mockReset();
     listCouncilTurns.mockReset();
+    listRelevantSessionInsights.mockReset();
+    refreshSessionInsight.mockReset();
     startCouncilSessionTurn.mockReset();
     streamCouncilTurn.mockReset();
     flattenTurnsToContextEntries.mockReset();
@@ -96,6 +102,17 @@ describe("METIS streaming council route", () => {
         summaryRationale: "The earlier turn concluded with a refinement.",
       },
     ]);
+    listRelevantSessionInsights.mockResolvedValue([
+      {
+        id: 11,
+        sessionId: "session-previous",
+        title: "Earlier launch lesson",
+        insight: "Start narrower than the founder instinct suggests.",
+        rationale: "Previous councils found sequencing was the main risk reducer.",
+        tags: ["launch", "sequencing"],
+        updatedAt: Date.now(),
+      },
+    ]);
     startCouncilSessionTurn.mockResolvedValue({
       sessionId: "session-live",
       sequenceOrder: 1,
@@ -104,7 +121,7 @@ describe("METIS streaming council route", () => {
       .mockResolvedValueOnce({ sequenceOrder: 2 })
       .mockResolvedValueOnce({ sequenceOrder: 3 });
 
-    streamCouncilTurn.mockImplementation(async ({ onEvent, historyEntries }) => {
+    streamCouncilTurn.mockImplementation(async ({ onEvent, historyEntries, relatedInsights }) => {
       expect(historyEntries).toEqual([
         {
           role: "user",
@@ -129,6 +146,17 @@ describe("METIS streaming council route", () => {
           confidence: 0.8,
           recommendedAction: "revise",
           summaryRationale: "The earlier turn concluded with a refinement.",
+        },
+      ]);
+      expect(relatedInsights).toEqual([
+        {
+          id: 11,
+          sessionId: "session-previous",
+          title: "Earlier launch lesson",
+          insight: "Start narrower than the founder instinct suggests.",
+          rationale: "Previous councils found sequencing was the main risk reducer.",
+          tags: ["launch", "sequencing"],
+          updatedAt: expect.any(Number),
         },
       ]);
 
@@ -160,7 +188,14 @@ describe("METIS streaming council route", () => {
         sessionId: "session-live",
         userMessage: "Continue the discussion live.",
         discussion: [],
-        synthesis: null,
+        synthesis: {
+          agentName: "Metis",
+          content: "Metis closes the live stream.",
+          sequenceOrder: 2,
+          confidence: 0.88,
+          recommendedAction: "proceed",
+          summaryRationale: "The closing synthesis ends the turn.",
+        },
         createdAt: Date.now(),
         completed: true,
       };
@@ -193,6 +228,17 @@ describe("METIS streaming council route", () => {
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
+
+    expect(listRelevantSessionInsights).toHaveBeenCalledWith({
+      userId: 7,
+      query: "Continue the discussion live.",
+      excludeSessionId: "session-live",
+      limit: 3,
+    });
+    expect(refreshSessionInsight).toHaveBeenCalledWith({
+      sessionId: "session-live",
+      userId: 7,
+    });
 
     expect(lines[0]).toEqual({
       type: "start",
@@ -236,6 +282,7 @@ describe("METIS streaming council route", () => {
     });
     listCouncilTurns.mockResolvedValue([]);
     flattenTurnsToContextEntries.mockReturnValue([]);
+    listRelevantSessionInsights.mockResolvedValue([]);
     startCouncilSessionTurn.mockResolvedValue({
       sessionId: "session-abort",
       sequenceOrder: 1,
@@ -302,6 +349,7 @@ describe("METIS streaming council route", () => {
       .map((line) => JSON.parse(line));
 
     expect(appendCouncilMessage).toHaveBeenCalledTimes(1);
+    expect(refreshSessionInsight).not.toHaveBeenCalled();
     expect(lines).toEqual([
       {
         type: "start",

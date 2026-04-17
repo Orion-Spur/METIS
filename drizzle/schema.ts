@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   numeric,
@@ -22,19 +23,24 @@ export const recommendedActionEnum = pgEnum("recommended_action", [
   "request_clarification",
 ]);
 
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
-  username: varchar("username", { length: 64 }).unique(),
-  passwordHash: text("passwordHash"),
-  name: text("name"),
-  email: varchar("email", { length: 320 }).unique(),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: userRoleEnum("role").default("user").notNull(),
-  createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    openId: varchar("openId", { length: 64 }).notNull().unique(),
+    username: varchar("username", { length: 64 }).unique(),
+    passwordHash: text("passwordHash"),
+    name: text("name"),
+    email: varchar("email", { length: 320 }).unique(),
+    loginMethod: varchar("loginMethod", { length: 64 }),
+    role: userRoleEnum("role").default("user").notNull(),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+    lastSignedIn: timestamp("lastSignedIn", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [index("users_role_active_idx").on(table.role, table.isActive)]
+);
 
 export const companyProfiles = pgTable("companyProfiles", {
   id: serial("id").primaryKey(),
@@ -60,12 +66,16 @@ export const councilSessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     title: varchar("title", { length: 255 }),
+    summary: text("summary"),
     status: councilSessionStatusEnum("status").default("active").notNull(),
     createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
     lastMessageAt: timestamp("lastMessageAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
   },
-  (table) => [index("council_sessions_user_id_idx").on(table.userId)]
+  (table) => [
+    index("council_sessions_user_id_idx").on(table.userId),
+    index("council_sessions_user_updated_idx").on(table.userId, table.updatedAt),
+  ]
 );
 
 export const councilMessages = pgTable(
@@ -90,6 +100,29 @@ export const councilMessages = pgTable(
   ]
 );
 
+export const sessionInsights = pgTable(
+  "sessionInsights",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: varchar("sessionId", { length: 64 })
+      .notNull()
+      .references(() => councilSessions.id, { onDelete: "cascade" }),
+    userId: integer("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 255 }).notNull(),
+    insight: text("insight").notNull(),
+    rationale: text("rationale"),
+    tags: text("tags"),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("session_insights_user_created_idx").on(table.userId, table.createdAt),
+    index("session_insights_session_id_idx").on(table.sessionId),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
@@ -101,3 +134,6 @@ export type InsertCouncilSession = typeof councilSessions.$inferInsert;
 
 export type CouncilMessage = typeof councilMessages.$inferSelect;
 export type InsertCouncilMessage = typeof councilMessages.$inferInsert;
+
+export type SessionInsight = typeof sessionInsights.$inferSelect;
+export type InsertSessionInsight = typeof sessionInsights.$inferInsert;

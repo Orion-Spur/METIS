@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { findUserByIdentifier, recordSuccessfulLogin } from "@/lib/db";
+import { findUserByIdentifier, getUserById, recordSuccessfulLogin } from "@/lib/db";
 import { z } from "zod";
 
 const SESSION_COOKIE = "metis_session";
@@ -64,7 +64,7 @@ export function createScryptHash(password: string) {
 export async function verifyCredentials(identifier: string, password: string): Promise<AuthenticatedSession | null> {
   const user = await findUserByIdentifier(identifier);
 
-  if (!user?.username || !user.passwordHash) {
+  if (!user?.username || !user.passwordHash || !user.isActive) {
     return null;
   }
 
@@ -122,7 +122,18 @@ export async function getCurrentSession() {
   }
 
   try {
-    return await verifySessionToken(token);
+    const session = await verifySessionToken(token);
+    const user = await getUserById(session.userId);
+
+    if (!user?.username || !user.isActive) {
+      return null;
+    }
+
+    return {
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+    };
   } catch {
     return null;
   }

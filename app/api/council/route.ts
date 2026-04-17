@@ -3,6 +3,8 @@ import { getCurrentSession } from "@/lib/auth";
 import {
   appendCouncilMessage,
   listCouncilTurns,
+  listRelevantSessionInsights,
+  refreshSessionInsight,
   startCouncilSessionTurn,
 } from "@/lib/db";
 import { flattenTurnsToContextEntries, streamCouncilTurn } from "@/lib/metisCouncil";
@@ -48,6 +50,12 @@ export async function POST(request: Request) {
     const body = requestSchema.parse(await request.json());
     const history = body.sessionId ? await listCouncilTurns(body.sessionId, session.userId) : [];
     const authoritativeHistoryEntries = history.length > 0 ? flattenTurnsToContextEntries(history) : undefined;
+    const relatedInsights = await listRelevantSessionInsights({
+      userId: session.userId,
+      query: body.message,
+      excludeSessionId: body.sessionId,
+      limit: 3,
+    });
     const started = await startCouncilSessionTurn({
       sessionId: body.sessionId,
       userId: session.userId,
@@ -101,6 +109,7 @@ export async function POST(request: Request) {
               userMessage: body.message,
               history,
               historyEntries: authoritativeHistoryEntries ?? body.liveContext,
+              relatedInsights,
               shouldStop: () => request.signal.aborted || closed,
               onEvent: async (event) => {
                 if (request.signal.aborted || closed) {
@@ -128,6 +137,13 @@ export async function POST(request: Request) {
                 });
               },
             });
+
+            if (result.completed && result.synthesis) {
+              await refreshSessionInsight({
+                sessionId: started.sessionId,
+                userId: session.userId,
+              });
+            }
 
             enqueue({
               type: "complete",

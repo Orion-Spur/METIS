@@ -88,14 +88,14 @@
 - [x] Identify and document the current METIS agent prompt file locations for Orion
 - [x] Design and implement a company profile data model in Postgres so products, mission, constraints, team size, and related business context can be injected into every council agent prompt
 - [x] Design and implement session memory so agents can reliably read and build on current-session conversation history
-- [ ] Design cross-session learning so prior session insights can be referenced deliberately and safely in later council sessions
-- [ ] Add history browsing and chat search capabilities inside the authenticated METIS experience
-- [ ] Add limited-user administration so Orion can grant or revoke access for a small number of approved people
+- [x] Design cross-session learning so prior session insights can be referenced deliberately and safely in later council sessions
+- [x] Add history browsing and chat search capabilities inside the authenticated METIS experience
+- [x] Add limited-user administration so Orion can grant or revoke access for a small number of approved people
 - [x] Outline the staged architecture needed to support the first real recorded METIS session with durable context, retrieval, and governance
 - [x] Implement company profile storage and prompt injection as the first foundation for real recorded METIS sessions
 - [x] Strengthen authoritative session memory so each model call is grounded in persisted transcript context rather than only live client state
 - [x] Add focused tests for company-context injection and session-memory continuity before building broader retrieval features
-- [ ] After that foundation lands, implement history/search, lightweight user administration, and cross-session learning in that order
+- [x] After that foundation lands, implement history/search, lightweight user administration, and cross-session learning in that order
 - [x] Restore the homepage to match the original reference composition closely, keeping the centered image-first login layout and removing the unintended extra copy
 - [x] Limit the homepage changes to the requested black background and one-screen fit without redesigning the original visual hierarchy
 - [x] Pause company profile content writing until Orion provides the actual business context to store and inject
@@ -128,3 +128,9 @@
 - [x] Implement explicit round-state tracking so Metis cannot synthesize until the full challenge round is complete across the planned sequence
 - [x] Add focused tests proving compact runtime enforcement and full-round gating beyond the current Loki-count check
 - [x] Create a living context document capturing METIS architecture, development history, deployment flow, operational state, and known issues for future work
+- [ ] Browser-verify session history and transcript search end to end, including empty, loading, error, and new-session refresh behaviour
+- [ ] Browser-verify cross-session insight creation and reuse across two separate sessions, and confirm prior learnings appear safely in later deliberations
+- [ ] Browser-verify admin user creation, role toggle, and access pause or restore with real authentication checks for active versus inactive users
+- [x] Add focused non-mocked tests for session insight refresh and session preview search behaviour against the real METIS database layer
+- [ ] Diagnose why this METIS workspace is not syncing commits to GitHub and restore a working push path
+- [ ] Retry GitHub sync after refreshed GitHub and Vercel authorisation and confirm whether direct push access is restored in this workspace

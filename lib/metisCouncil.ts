@@ -6,6 +6,7 @@ import type {
   MetisCouncilMessage,
   MetisCouncilTurn,
   MetisRecommendedAction,
+  MetisSessionInsight,
 } from "@/shared/metis";
 
 const recommendedActions = [
@@ -372,6 +373,7 @@ function buildStructuredPrompt(input: {
   stageDirection: string;
   discussion: CouncilContextEntry[];
   companyContext?: string;
+  relatedInsights?: MetisSessionInsight[];
   finalSynthesis?: boolean;
 }) {
   const priorAgentMessages = input.discussion.filter((entry) => entry.role !== "user").length;
@@ -391,8 +393,19 @@ function buildStructuredPrompt(input: {
         ? "Your challenge is mandatory. Name the sharpest weakness plainly so the room must deal with it before convergence."
         : "Keep your stance clear, concise, and responsive to the current tension rather than restating the whole case.";
 
+  const insightsBlock = input.relatedInsights && input.relatedInsights.length > 0
+    ? [
+        "Relevant prior learnings:",
+        ...input.relatedInsights.map(
+          (entry, index) =>
+            `${index + 1}. ${entry.title} — ${entry.insight}${entry.rationale ? ` | Rationale: ${entry.rationale}` : ""}`,
+        ),
+      ].join("\n")
+    : "Relevant prior learnings: None retrieved for this brief. Do not invent prior outcomes.";
+
   return [
     input.companyContext ?? "Company context: No company profile has been configured yet.",
+    insightsBlock,
     `Council brief:\n${input.brief}`,
     `Stage direction:\n${input.stageDirection}`,
     `Current discussion transcript:\n${formatTranscript(input.discussion)}`,
@@ -619,6 +632,7 @@ export async function streamCouncilTurn(input: {
   userMessage: string;
   history?: MetisCouncilTurn[];
   historyEntries?: CouncilContextEntry[];
+  relatedInsights?: MetisSessionInsight[];
   onEvent?: (event: StreamedCouncilEvent) => Promise<void> | void;
   shouldStop?: () => Promise<boolean> | boolean;
 }): Promise<StreamCouncilTurnResult> {
@@ -663,6 +677,7 @@ export async function streamCouncilTurn(input: {
         stageDirection: step.stageDirection,
         discussion: contextSequence,
         companyContext,
+        relatedInsights: input.relatedInsights,
         finalSynthesis: step.kind === "synthesis",
       }),
       { finalSynthesis: step.kind === "synthesis" },

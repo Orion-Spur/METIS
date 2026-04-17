@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import CouncilInterface from "@/components/CouncilInterface";
 import { getCurrentSession } from "@/lib/auth";
-import { listCouncilTurns } from "@/lib/db";
+import { listCouncilTurns, listRecentSessions, listUsersForAdmin } from "@/lib/db";
 
 export default async function CouncilPage({
   searchParams,
@@ -15,13 +15,20 @@ export default async function CouncilPage({
 
   const params = await searchParams;
   const sessionId = params.session;
-  const initialTurns = sessionId ? await listCouncilTurns(sessionId, session.userId) : [];
+  const [initialTurns, initialSessions, initialUsers] = await Promise.all([
+    sessionId ? listCouncilTurns(sessionId, session.userId) : Promise.resolve([]),
+    listRecentSessions(session.userId),
+    session.role === "admin" ? listUsersForAdmin() : Promise.resolve([]),
+  ]);
 
   return (
     <CouncilInterface
       initialSessionId={sessionId}
       initialTurns={initialTurns}
+      initialSessions={initialSessions}
+      initialUsers={initialUsers}
       username={session.username}
+      userRole={session.role}
     />
   );
 }
