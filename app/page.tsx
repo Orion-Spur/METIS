@@ -1,7 +1,7 @@
 import Image from "next/image";
 
-const heroImageUrl =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310419663027693392/UBEB3LPMmJcfp2PN3Y3yS5/metis_26e2831c.webp";
+const heroImageUrl = "/metis-hero.webp";
+
 
 export default async function HomePage({
   searchParams,
