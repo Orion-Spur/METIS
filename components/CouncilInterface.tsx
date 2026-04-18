@@ -754,29 +754,28 @@ export default function CouncilInterface({
                   <div ref={transcriptEndRef} />
                 </div>
 
-                <form onSubmit={handleSubmit} className="mt-2 rounded-[1.75rem] border border-[rgba(214,162,79,0.18)] bg-black/20 p-4">
-                  <label htmlFor="council-brief" className="text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.75)]">
+                <form onSubmit={handleSubmit} className="mt-2 rounded-[1.5rem] border border-[rgba(214,162,79,0.18)] bg-black/20 p-3">
+                  <label htmlFor="council-brief" className="sr-only">
                     {hasLiveSession ? "Interject now" : "New brief"}
                   </label>
-                  <textarea
-                    id="council-brief"
-                    value={message}
-                    onChange={(event) => setMessage(event.target.value)}
-                    placeholder={hasLiveSession ? "Interrupt the room with a correction, challenge, or new instruction for Orion's council." : "Ask the council to debate a strategy, architecture, campaign, or product decision."}
-                    className="mt-3 min-h-28 w-full resize-none rounded-[1.2rem] border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-4 text-sm leading-7 text-[#f7ebc8] placeholder:text-[rgba(214,162,79,0.42)]"
-                  />
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-xs leading-6 text-[rgba(243,231,192,0.62)]">The transcript behaves like a live room. Orion’s message appears immediately, each council response arrives incrementally, and you can stop the current run before sending a redirect.</div>
-                    <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                    <textarea
+                      id="council-brief"
+                      value={message}
+                      onChange={(event) => setMessage(event.target.value)}
+                      placeholder={hasLiveSession ? "Send a redirect or challenge..." : "Brief the council..."}
+                      className="min-h-[3.5rem] w-full resize-none rounded-[1rem] border border-[rgba(214,162,79,0.18)] bg-[rgba(4,4,4,0.72)] px-4 py-3 text-sm leading-6 text-[#f7ebc8] placeholder:text-[rgba(214,162,79,0.42)]"
+                    />
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       {isStreaming ? (
-                        <button type="button" onClick={handleStop} className="inline-flex items-center justify-center gap-2 rounded-full border border-[rgba(214,162,79,0.26)] px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#f6e7be] transition hover:border-[rgba(214,162,79,0.46)]">
+                        <button type="button" onClick={handleStop} className="inline-flex items-center justify-center gap-2 rounded-full border border-[rgba(214,162,79,0.26)] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#f6e7be] transition hover:border-[rgba(214,162,79,0.46)]">
                           <Square className="h-4 w-4" />
-                          Stop run
+                          Stop
                         </button>
                       ) : null}
-                      <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#d6a24f] px-5 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-[#140d05] transition hover:bg-[#e0b163]">
+                      <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#d6a24f] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#140d05] transition hover:bg-[#e0b163]">
                         <SendHorizontal className="h-4 w-4" />
-                        {hasLiveSession ? "Send interjection" : "Convene council"}
+                        Send
                       </button>
                     </div>
                   </div>
@@ -785,7 +784,7 @@ export default function CouncilInterface({
               </div>
             </section>
 
-            <aside className="space-y-4">
+            <aside className="hidden space-y-4">
               <section className="rounded-[2rem] border border-[rgba(214,162,79,0.2)] bg-[rgba(9,8,6,0.82)] p-5">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-[rgba(214,162,79,0.72)]">
                   <Shield className="h-4 w-4" />

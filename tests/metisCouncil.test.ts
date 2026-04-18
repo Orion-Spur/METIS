@@ -475,8 +475,9 @@ describe("METIS council orchestration", () => {
     });
 
     const anthropicCallBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}"));
-    expect(anthropicCallBody.messages[0].content).toContain("use the retrieved prior-session learnings directly");
-    expect(anthropicCallBody.messages[0].content).toContain("State clearly that they come from earlier sessions");
+    expect(anthropicCallBody.messages[0].content).toContain("Retrieved prior-session learnings are available");
+    expect(anthropicCallBody.messages[0].content).toContain("Open with a clearly labeled prior-memory statement");
+    expect(anthropicCallBody.messages[0].content).toContain("start with 'Prior memory:'");
     expect(anthropicCallBody.messages[0].content).toContain("Pilot launch before full rollout");
   });
 

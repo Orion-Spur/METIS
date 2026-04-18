@@ -146,6 +146,10 @@
 - [x] Simplify the council composer to a smaller plain input and compact send button without instructional helper copy.
 - [x] Verify and fix cross-session recall so agents can actually access prior session insights during deliberation.
 - [x] Reduce expensive Opus usage in automated tests and validation flows.
-- [ ] Confirm the architecture supports wiping prior session memory after recall validation and before the first live session.
-- [ ] Prepare a clear explanation of the Vercel frontend plus AWS processing split and the migration path off the current timeout-constrained runtime.
+- [x] Confirm the architecture supports wiping prior session memory after recall validation and before the first live session.
+- [x] Prepare a clear explanation of the Vercel frontend plus AWS processing split and the migration path off the current timeout-constrained runtime.
 
+- [x] Verify the live council flow directly without requiring user browser takeover, including API-level submission and authenticated runtime checks.
+- [ ] Leave METIS in a publish-ready state after testing so the user can publish immediately from the UI.
+- [x] Strengthen fresh-room continuity prompting so retrieved prior-session insights are surfaced explicitly instead of the council claiming no prior memory.
+- [x] Expand recall-intent detection so continuity prompts like 'what did we agree' and 'previously agree' trigger prior-session retrieval fallback reliably.

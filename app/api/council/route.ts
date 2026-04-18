@@ -10,7 +10,7 @@ import {
 import { flattenTurnsToContextEntries, streamCouncilTurn } from "@/lib/metisCouncil";
 
 const encoder = new TextEncoder();
-const recallIntentPattern = /\b(agreed|agreement|agreements|decided|decision|decisions|summary|summarise|summarize|recap|recall|previous session|prior session|earlier session|where we left off|what happened|what has been agreed|today(?:'s)? discussion|today(?:'s)? discussions|this discussion|this session)\b/i;
+const recallIntentPattern = /\b(agree|agreed|agreement|agreements|decide|decided|decision|decisions|summary|summarise|summarize|recap|recall|previous|previously|earlier|prior|previous session|prior session|earlier session|where we left off|what happened|what has been agreed|what did we agree|today(?:'s)? discussion|today(?:'s)? discussions|this discussion|this session)\b/i;
 
 const requestSchema = z.object({
   sessionId: z.string().min(1).max(64).optional(),

@@ -377,7 +377,7 @@ function buildStructuredPrompt(input: {
   finalSynthesis?: boolean;
 }) {
   const priorAgentMessages = input.discussion.filter((entry) => entry.role !== "user").length;
-  const recallIntent = /\b(agreed|agreement|agreements|decided|decision|decisions|summary|summarise|summarize|recap|recall|previous session|prior session|earlier session|where we left off|what happened|what has been agreed|today(?:'s)? discussion|today(?:'s)? discussions|this discussion|this session)\b/i.test(
+  const recallIntent = /\b(agree|agreed|agreement|agreements|decide|decided|decision|decisions|summary|summarise|summarize|recap|recall|previous|previously|earlier|prior|previous session|prior session|earlier session|where we left off|what happened|what has been agreed|what did we agree|today(?:'s)? discussion|today(?:'s)? discussions|this discussion|this session)\b/i.test(
     input.brief,
   );
   const engagementInstruction =
@@ -389,7 +389,7 @@ function buildStructuredPrompt(input: {
     ? priorAgentMessages > 0
       ? "Orion is asking for continuity. Summarize what this live session has actually established so far before reaching for older memory, and keep any cross-session recall clearly labeled as prior memory."
       : input.relatedInsights && input.relatedInsights.length > 0
-        ? "Orion is asking for continuity in a fresh room. Because the live session has little or no substantive transcript yet, use the retrieved prior-session learnings directly. State clearly that they come from earlier sessions rather than from this live exchange."
+        ? "Orion is asking for continuity in a fresh room. Retrieved prior-session learnings are available, so you must use them directly instead of claiming no memory was retrieved. Open with a clearly labeled prior-memory statement, ground it in at least one retrieved learning, and only then explain how it should shape the current decision."
         : "Orion is asking for continuity, but no earlier learnings were retrieved. Be explicit about the lack of prior memory instead of pretending this fresh room has already decided something."
     : "If relevant prior learnings exist, use them deliberately and label them as prior-session memory rather than current-room agreement.";
 
@@ -427,7 +427,9 @@ function buildStructuredPrompt(input: {
     "Council response format is mandatory.",
     "Return valid JSON only with exactly these fields: position, keyReasoning, challenge, confidence, recommendedAction, summaryRationale.",
     "Formatting rules:",
-    "- position: 1 or 2 sentences, maximum 45 words.",
+    recallIntent && !priorAgentMessages && input.relatedInsights && input.relatedInsights.length > 0
+      ? "- position: start with 'Prior memory:' and summarize at least one retrieved earlier-session learning before giving the current-room implication, maximum 45 words."
+      : "- position: 1 or 2 sentences, maximum 45 words.",
     "- keyReasoning: an array of 1 to 5 short bullet-ready strings, each under 18 words.",
     "- challenge: exactly 1 short bullet-worthy sentence naming the strongest disagreement or risk.",
     "- summaryRationale: exactly 1 short sentence under 20 words.",
