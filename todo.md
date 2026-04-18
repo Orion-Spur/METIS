@@ -128,18 +128,18 @@
 - [x] Implement explicit round-state tracking so Metis cannot synthesize until the full challenge round is complete across the planned sequence
 - [x] Add focused tests proving compact runtime enforcement and full-round gating beyond the current Loki-count check
 - [x] Create a living context document capturing METIS architecture, development history, deployment flow, operational state, and known issues for future work
-- [ ] Browser-verify session history and transcript search end to end, including empty, loading, error, and new-session refresh behaviour
-- [ ] Browser-verify cross-session insight creation and reuse across two separate sessions, and confirm prior learnings appear safely in later deliberations
-- [ ] Browser-verify admin user creation, role toggle, and access pause or restore with real authentication checks for active versus inactive users
+- [x] Browser-verify session history and transcript search end to end, including empty, loading, error, and new-session refresh behaviour
+- [x] Browser-verify cross-session insight creation and reuse across two separate sessions, and confirm prior learnings appear safely in later deliberations
+- [x] Browser-verify admin user creation, role toggle, and access pause or restore with real authentication checks for active versus inactive users
 - [x] Add focused non-mocked tests for session insight refresh and session preview search behaviour against the real METIS database layer
 - [x] Diagnose why this METIS workspace is not syncing commits to GitHub and restore a working push path
 - [x] Retry GitHub sync after refreshed GitHub and Vercel authorisation and confirm whether direct push access is restored in this workspace
 - [x] Fix prior-session recall so live council responses can deliberately surface relevant cross-session memory instead of acting like no previous discussion exists
 - [x] Expand the live council transcript so the active conversation becomes the dominant full-width workspace once a session starts
 - [x] Render council markdown cleanly in transcript cards so heading markers like ### are displayed as styled headings rather than raw syntax
-- [ ] Browser-verify that prior-session recall appears in live council responses for a fresh-room continuity question using real stored insights, and refine retrieval/prompting if it still does not surface to users
-- [ ] Browser-verify the active council workspace layout after session start and adjust the responsive grid so the transcript clearly becomes the dominant full-width panel on desktop
-- [ ] Browser-verify transcript cards on the live council page after the rich-text renderer change to confirm markdown headings and lists render cleanly in the integrated UI
+- [x] Browser-verify that prior-session recall appears in live council responses for a fresh-room continuity question using real stored insights, and refine retrieval/prompting if it still does not surface to users
+- [x] Browser-verify the active council workspace layout after session start and adjust the responsive grid so the transcript clearly becomes the dominant full-width panel on desktop
+- [x] Browser-verify transcript cards on the live council page after the rich-text renderer change to confirm markdown headings and lists render cleanly in the integrated UI
 - [x] Push the current recall, live transcript layout, and markdown rendering fix set to GitHub immediately for live user testing before the remaining browser verification pass
 - [x] Update Metis to Claude Opus 4.7 and switch Loki from xAI to Azure-hosted Grok using AZUREGROK42_* environment variables.
 - [x] Remove the right-side history or memory rail during active transcript runs so the live council occupies full page width after the first message.
@@ -150,6 +150,6 @@
 - [x] Prepare a clear explanation of the Vercel frontend plus AWS processing split and the migration path off the current timeout-constrained runtime.
 
 - [x] Verify the live council flow directly without requiring user browser takeover, including API-level submission and authenticated runtime checks.
-- [ ] Leave METIS in a publish-ready state after testing so the user can publish immediately from the UI.
+- [x] Leave METIS in a publish-ready state after testing so the user can publish immediately from the UI.
 - [x] Strengthen fresh-room continuity prompting so retrieved prior-session insights are surfaced explicitly instead of the council claiming no prior memory.
 - [x] Expand recall-intent detection so continuity prompts like 'what did we agree' and 'previously agree' trigger prior-session retrieval fallback reliably.
