@@ -137,9 +137,15 @@
 - [x] Fix prior-session recall so live council responses can deliberately surface relevant cross-session memory instead of acting like no previous discussion exists
 - [x] Expand the live council transcript so the active conversation becomes the dominant full-width workspace once a session starts
 - [x] Render council markdown cleanly in transcript cards so heading markers like ### are displayed as styled headings rather than raw syntax
+<<<<<<< HEAD
 - [x] Browser-verify that prior-session recall appears in live council responses for a fresh-room continuity question using real stored insights, and refine retrieval/prompting if it still does not surface to users
 - [x] Browser-verify the active council workspace layout after session start and adjust the responsive grid so the transcript clearly becomes the dominant full-width panel on desktop
 - [x] Browser-verify transcript cards on the live council page after the rich-text renderer change to confirm markdown headings and lists render cleanly in the integrated UI
+=======
+- [ ] Browser-verify that prior-session recall appears in live council responses for a fresh-room continuity question using real stored insights, and refine retrieval/prompting if it still does not surface to users
+- [ ] Browser-verify the active council workspace layout after session start and adjust the responsive grid so the transcript clearly becomes the dominant full-width panel on desktop
+- [ ] Browser-verify transcript cards on the live council page after the rich-text renderer change to confirm markdown headings and lists render cleanly in the integrated UI
+>>>>>>> 446a1bc (Checkpoint: Updated METIS for first-session preparation: switched Metis default to Claude Opus 4.7, moved Loki from direct xAI to Azure-hosted Grok with validated AZUREGROK42 credentials, collapsed the active-session side rail for full-width live transcripts, simplified the composer to a compact input and send control, added recent-insight fallback for recall continuity prompts, and made expensive live provider tests opt-in while keeping a focused Azure Grok live validation test.)
 - [x] Push the current recall, live transcript layout, and markdown rendering fix set to GitHub immediately for live user testing before the remaining browser verification pass
 - [x] Update Metis to Claude Opus 4.7 and switch Loki from xAI to Azure-hosted Grok using AZUREGROK42_* environment variables.
 - [x] Remove the right-side history or memory rail during active transcript runs so the live council occupies full page width after the first message.
@@ -153,3 +159,4 @@
 - [x] Leave METIS in a publish-ready state after testing so the user can publish immediately from the UI.
 - [x] Strengthen fresh-room continuity prompting so retrieved prior-session insights are surfaced explicitly instead of the council claiming no prior memory.
 - [x] Expand recall-intent detection so continuity prompts like 'what did we agree' and 'previously agree' trigger prior-session retrieval fallback reliably.
+
