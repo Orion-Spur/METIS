@@ -272,6 +272,82 @@ describe("METIS streaming council route", () => {
     });
   });
 
+  it("falls back to recent insights when Orion explicitly asks for continuity and the first retrieval returns nothing", async () => {
+    getCurrentSession.mockResolvedValue({
+      userId: 7,
+      username: "orion",
+      role: "admin",
+    });
+    listCouncilTurns.mockResolvedValue([]);
+    flattenTurnsToContextEntries.mockReturnValue([]);
+    listRelevantSessionInsights
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 19,
+          sessionId: "session-earlier",
+          title: "Earlier operating agreement",
+          insight: "Keep architecture decisions before specialist expansion.",
+          rationale: "The earlier room found sequencing reduced rework.",
+          tags: ["architecture", "sequencing"],
+          updatedAt: Date.now(),
+        },
+      ]);
+    startCouncilSessionTurn.mockResolvedValue({
+      sessionId: "session-recall",
+      sequenceOrder: 1,
+    });
+
+    streamCouncilTurn.mockImplementation(async ({ relatedInsights }) => {
+      expect(listRelevantSessionInsights).toHaveBeenNthCalledWith(1, {
+        userId: 7,
+        query: "What did we agree in previous sessions about architecture first?",
+        excludeSessionId: undefined,
+        limit: 3,
+      });
+      expect(listRelevantSessionInsights).toHaveBeenNthCalledWith(2, {
+        userId: 7,
+        excludeSessionId: undefined,
+        limit: 3,
+      });
+      expect(relatedInsights).toEqual([
+        {
+          id: 19,
+          sessionId: "session-earlier",
+          title: "Earlier operating agreement",
+          insight: "Keep architecture decisions before specialist expansion.",
+          rationale: "The earlier room found sequencing reduced rework.",
+          tags: ["architecture", "sequencing"],
+          updatedAt: expect.any(Number),
+        },
+      ]);
+
+      return {
+        sessionId: "session-recall",
+        userMessage: "What did we agree in previous sessions about architecture first?",
+        discussion: [],
+        synthesis: null,
+        createdAt: Date.now(),
+        completed: false,
+      };
+    });
+
+    const route = await loadRouteModule();
+    const response = await route.POST(
+      new Request("http://localhost/api/council", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          message: "What did we agree in previous sessions about architecture first?",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
   it("does not enqueue a council message after the request is aborted while persistence is still in flight", async () => {
     vi.useFakeTimers();
 

@@ -191,7 +191,7 @@ function createFetchMock() {
       };
     }
 
-    if (url.includes("api.x.ai")) {
+    if (url.includes("azure-grok.example.com")) {
       const response = queues.xaiResponses.shift();
       return {
         ok: true,
@@ -257,7 +257,7 @@ function createVerboseFetchMock() {
       };
     }
 
-    if (url.includes("api.x.ai")) {
+    if (url.includes("azure-grok.example.com")) {
       return {
         ok: true,
         json: async () => ({
@@ -287,7 +287,10 @@ describe("METIS council orchestration", () => {
     process.env.AZUREGPT54_ENDPOINT = "https://azure.example.com";
     process.env.AZUREGPT54_DEPLOYMENT = "gpt-55";
     process.env.GEMINI_API_KEY = "gemini-test";
-    process.env.XAI_API_KEY = "xai-test";
+    process.env.AZUREGROK42_API_KEY = "azure-grok-test";
+    process.env.AZUREGROK42_ENDPOINT = "https://azure-grok.example.com/openai/v1";
+    process.env.AZUREGROK42_DEPLOYMENT = "grok-4-20-reasoning";
+    process.env.AZUREGROK42_MODEL = "grok-4-20-reasoning";
     getCompanyProfile.mockResolvedValue({
       id: 1,
       slug: "default",

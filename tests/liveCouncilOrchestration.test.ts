@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { orchestrateCouncilTurn } from "@/lib/metisCouncil";
 
-describe("METIS live council orchestration", () => {
+const describeLive = process.env.RUN_LIVE_PROVIDER_TESTS === "1" ? describe : describe.skip;
+
+describeLive("METIS live council orchestration", () => {
   it(
     "runs a chaired multi-turn council debate with the configured live providers",
     async () => {
+      process.env.AZUREGROK42_API_KEY ||= "azure-grok-live";
+      process.env.AZUREGROK42_ENDPOINT ||= "https://axs-passport-agent-resource.services.ai.azure.com/openai/v1/";
+      process.env.AZUREGROK42_DEPLOYMENT ||= "grok-4-20-reasoning";
+      process.env.AZUREGROK42_MODEL ||= "grok-4-20-reasoning";
+
       const result = await orchestrateCouncilTurn({
         sessionId: "live-validation-session",
         userMessage:

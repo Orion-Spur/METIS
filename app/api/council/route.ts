@@ -10,6 +10,7 @@ import {
 import { flattenTurnsToContextEntries, streamCouncilTurn } from "@/lib/metisCouncil";
 
 const encoder = new TextEncoder();
+const recallIntentPattern = /\b(agreed|agreement|agreements|decided|decision|decisions|summary|summarise|summarize|recap|recall|previous session|prior session|earlier session|where we left off|what happened|what has been agreed|today(?:'s)? discussion|today(?:'s)? discussions|this discussion|this session)\b/i;
 
 const requestSchema = z.object({
   sessionId: z.string().min(1).max(64).optional(),
@@ -50,12 +51,21 @@ export async function POST(request: Request) {
     const body = requestSchema.parse(await request.json());
     const history = body.sessionId ? await listCouncilTurns(body.sessionId, session.userId) : [];
     const authoritativeHistoryEntries = history.length > 0 ? flattenTurnsToContextEntries(history) : undefined;
-    const relatedInsights = await listRelevantSessionInsights({
+    const recallIntent = recallIntentPattern.test(body.message);
+    let relatedInsights = await listRelevantSessionInsights({
       userId: session.userId,
       query: body.message,
       excludeSessionId: body.sessionId,
       limit: 3,
     });
+
+    if (recallIntent && relatedInsights.length === 0) {
+      relatedInsights = await listRelevantSessionInsights({
+        userId: session.userId,
+        excludeSessionId: body.sessionId,
+        limit: 3,
+      });
+    }
     const started = await startCouncilSessionTurn({
       sessionId: body.sessionId,
       userId: session.userId,

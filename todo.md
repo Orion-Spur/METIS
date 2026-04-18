@@ -140,4 +140,12 @@
 - [ ] Browser-verify that prior-session recall appears in live council responses for a fresh-room continuity question using real stored insights, and refine retrieval/prompting if it still does not surface to users
 - [ ] Browser-verify the active council workspace layout after session start and adjust the responsive grid so the transcript clearly becomes the dominant full-width panel on desktop
 - [ ] Browser-verify transcript cards on the live council page after the rich-text renderer change to confirm markdown headings and lists render cleanly in the integrated UI
-- [ ] Push the current recall, live transcript layout, and markdown rendering fix set to GitHub immediately for live user testing before the remaining browser verification pass
+- [x] Push the current recall, live transcript layout, and markdown rendering fix set to GitHub immediately for live user testing before the remaining browser verification pass
+- [x] Update Metis to Claude Opus 4.7 and switch Loki from xAI to Azure-hosted Grok using AZUREGROK42_* environment variables.
+- [x] Remove the right-side history or memory rail during active transcript runs so the live council occupies full page width after the first message.
+- [x] Simplify the council composer to a smaller plain input and compact send button without instructional helper copy.
+- [x] Verify and fix cross-session recall so agents can actually access prior session insights during deliberation.
+- [x] Reduce expensive Opus usage in automated tests and validation flows.
+- [ ] Confirm the architecture supports wiping prior session memory after recall validation and before the first live session.
+- [ ] Prepare a clear explanation of the Vercel frontend plus AWS processing split and the migration path off the current timeout-constrained runtime.
+

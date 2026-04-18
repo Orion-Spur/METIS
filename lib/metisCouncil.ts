@@ -545,19 +545,20 @@ async function callGemini(system: string, prompt: string) {
   return String(data.candidates?.[0]?.content?.parts?.[0]?.text ?? "");
 }
 
-async function callXai(system: string, prompt: string) {
-  if (!ENV.XAI_API_KEY) {
-    throw new Error("XAI_API_KEY is not configured.");
+async function callAzureGrok(system: string, prompt: string) {
+  if (!ENV.AZUREGROK42_API_KEY || !ENV.AZUREGROK42_ENDPOINT || !ENV.AZUREGROK42_DEPLOYMENT) {
+    throw new Error("Azure Grok configuration is incomplete.");
   }
 
-  const response = await fetchWithRetry("https://api.x.ai/v1/chat/completions", {
+  const url = `${ENV.AZUREGROK42_ENDPOINT.replace(/\/$/, "")}/chat/completions`;
+  const response = await fetchWithRetry(url, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${ENV.XAI_API_KEY}`,
       "content-type": "application/json",
+      "api-key": ENV.AZUREGROK42_API_KEY,
     },
     body: JSON.stringify({
-      model: ENV.XAI_MODEL,
+      model: ENV.AZUREGROK42_DEPLOYMENT ?? ENV.AZUREGROK42_MODEL,
       messages: [
         { role: "system", content: system },
         { role: "user", content: prompt },
@@ -568,7 +569,7 @@ async function callXai(system: string, prompt: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`xAI request failed with ${response.status}`);
+    throw new Error(`Azure Grok request failed with ${response.status}`);
   }
 
   const data = await response.json();
@@ -591,7 +592,7 @@ async function invokeAgent(
     return normaliseOutput(agentName, await callGemini(system, prompt), options);
   }
 
-  return normaliseOutput(agentName, await callXai(system, prompt), options);
+  return normaliseOutput(agentName, await callAzureGrok(system, prompt), options);
 }
 
 function asDiscussionMessage(output: MetisAgentOutput, sequenceOrder: number): MetisCouncilMessage {

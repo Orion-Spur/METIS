@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ENV } from "@/lib/env";
 
+const describeLive = process.env.RUN_LIVE_PROVIDER_TESTS === "1" ? describe : describe.skip;
+
 async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, attempts = 3) {
   let lastError: unknown;
 
@@ -20,7 +22,7 @@ async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, attem
   throw lastError;
 }
 
-describe("METIS live provider credential validation", () => {
+describeLive("METIS live provider credential validation", () => {
   it("validates the Anthropic credential", async () => {
     expect(ENV.ANTHROPIC_API_KEY).toBeTruthy();
 
@@ -95,19 +97,22 @@ describe("METIS live provider credential validation", () => {
     expect((data.candidates?.length ?? 0) > 0).toBe(true);
   }, 30000);
 
-  it("validates the xAI credential", async () => {
-    expect(ENV.XAI_API_KEY).toBeTruthy();
+  it("validates the Azure Grok credential and deployment configuration", async () => {
+    expect(ENV.AZUREGROK42_API_KEY).toBeTruthy();
+    expect(ENV.AZUREGROK42_ENDPOINT).toBeTruthy();
+    expect(ENV.AZUREGROK42_DEPLOYMENT).toBeTruthy();
 
-    const response = await fetchWithRetry("https://api.x.ai/v1/chat/completions", {
+    const url = `${ENV.AZUREGROK42_ENDPOINT!.replace(/\/$/, "")}/openai/deployments/${ENV.AZUREGROK42_DEPLOYMENT}/chat/completions?api-version=2024-08-01-preview`;
+    const response = await fetchWithRetry(url, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${ENV.XAI_API_KEY!}`,
         "content-type": "application/json",
+        "api-key": ENV.AZUREGROK42_API_KEY!,
       },
       body: JSON.stringify({
-        model: ENV.XAI_MODEL,
+        model: ENV.AZUREGROK42_MODEL,
         messages: [{ role: "user", content: "Reply with OK." }],
-        max_tokens: 8,
+        max_completion_tokens: 8,
         temperature: 0,
       }),
     });
