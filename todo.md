@@ -167,3 +167,4 @@
 - [x] Expand recall-intent detection so continuity prompts like 'what did we agree' and 'previously agree' trigger prior-session retrieval fallback reliably.
 - [x] Investigate why the latest live session returned a cold-start no-memory answer and confirm whether an intentional cold-start constraint is active in the recall pipeline.
 - [x] Implement a retrieval fallback that can recall past sessions even when curated session insights are missing or empty, and validate it against live continuity prompts.
+- [x] Push the validated retrieval fallback fix to the GitHub repository so Vercel deploys the live recall repair.
