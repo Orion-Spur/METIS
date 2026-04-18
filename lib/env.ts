@@ -14,6 +14,7 @@ const envSchema = z.object({
   GEMINI_MODEL: z.string().default("gemini-3.1-pro-preview"),
   AZUREGROK42_MODEL: z.string().default("grok-4-20-reasoning"),
   ANTHROPIC_MODEL: z.string().default("claude-opus-4-7"),
+  METIS_LEARNING_EXTRACTOR_MODEL: z.string().default("claude-haiku-4-5-20251001"),
 });
 
 export const ENV = envSchema.parse({
@@ -30,4 +31,5 @@ export const ENV = envSchema.parse({
   GEMINI_MODEL: process.env.GEMINI_MODEL,
   AZUREGROK42_MODEL: process.env.AZUREGROK42_MODEL,
   ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
+  METIS_LEARNING_EXTRACTOR_MODEL: process.env.METIS_LEARNING_EXTRACTOR_MODEL,
 });

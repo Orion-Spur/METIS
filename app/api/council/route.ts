@@ -3,10 +3,13 @@ import { getCurrentSession } from "@/lib/auth";
 import {
   appendCouncilMessage,
   listCouncilTurns,
+  listRelevantLearnings,
   listRelevantSessionInsights,
+  persistExtractedLearnings,
   refreshSessionInsight,
   startCouncilSessionTurn,
 } from "@/lib/db";
+import { extractLearnings } from "@/lib/learningExtractor";
 import { flattenTurnsToContextEntries, streamCouncilTurn } from "@/lib/metisCouncil";
 
 const encoder = new TextEncoder();
@@ -52,6 +55,26 @@ export async function POST(request: Request) {
     const history = body.sessionId ? await listCouncilTurns(body.sessionId, session.userId) : [];
     const authoritativeHistoryEntries = history.length > 0 ? flattenTurnsToContextEntries(history) : undefined;
     const recallIntent = recallIntentPattern.test(body.message);
+
+    // New structured learnings (Phase 1). This is the primary memory path.
+    let relatedLearnings = await listRelevantLearnings({
+      userId: session.userId,
+      query: body.message,
+      excludeSessionId: body.sessionId,
+      limit: 6,
+    });
+
+    if (recallIntent && relatedLearnings.length === 0) {
+      relatedLearnings = await listRelevantLearnings({
+        userId: session.userId,
+        excludeSessionId: body.sessionId,
+        limit: 6,
+      });
+    }
+
+    // Legacy insights path kept alive as a fallback for sessions that
+    // pre-date Phase 1 extraction. Once the learnings corpus is populated
+    // this will stop being hit in practice.
     let relatedInsights = await listRelevantSessionInsights({
       userId: session.userId,
       query: body.message,
@@ -66,6 +89,7 @@ export async function POST(request: Request) {
         limit: 3,
       });
     }
+
     const started = await startCouncilSessionTurn({
       sessionId: body.sessionId,
       userId: session.userId,
@@ -120,6 +144,7 @@ export async function POST(request: Request) {
               history,
               historyEntries: authoritativeHistoryEntries ?? body.liveContext,
               relatedInsights,
+              relatedLearnings,
               shouldStop: () => request.signal.aborted || closed,
               onEvent: async (event) => {
                 if (request.signal.aborted || closed) {
@@ -149,10 +174,40 @@ export async function POST(request: Request) {
             });
 
             if (result.completed && result.synthesis) {
+              // Keep the legacy insight refresh alive during the Phase 1
+              // transition. This is cheap and preserves existing recall.
               await refreshSessionInsight({
                 sessionId: started.sessionId,
                 userId: session.userId,
               });
+
+              // New: extract structured learnings from the completed session.
+              // This runs AFTER streaming so it never delays the user, and
+              // is wrapped in try/catch so a failure here cannot break a
+              // successful council run.
+              try {
+                const freshTurns = await listCouncilTurns(started.sessionId, session.userId);
+                const latestTurn = freshTurns.at(-1);
+                if (latestTurn) {
+                  const extracted = await extractLearnings({
+                    brief: latestTurn.userMessage,
+                    transcript: latestTurn.discussion,
+                    synthesis: latestTurn.synthesis,
+                  });
+                  if (extracted.length > 0) {
+                    await persistExtractedLearnings({
+                      sessionId: started.sessionId,
+                      userId: session.userId,
+                      learnings: extracted,
+                    });
+                  }
+                }
+              } catch (extractionError) {
+                console.warn(
+                  "[council.route] learning extraction failed but the session is persisted",
+                  extractionError,
+                );
+              }
             }
 
             enqueue({

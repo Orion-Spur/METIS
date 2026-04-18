@@ -1,9 +1,10 @@
-import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { nanoid } from "nanoid";
 import postgres from "postgres";
 import {
   companyProfiles,
+  councilLearnings,
   councilMessages,
   councilSessions,
   sessionInsights,
@@ -11,8 +12,11 @@ import {
 } from "@/drizzle/schema";
 import { ENV } from "@/lib/env";
 import type {
+  ExtractedLearning,
+  MetisCouncilLearning,
   MetisCouncilMessage,
   MetisCouncilTurn,
+  MetisLearningKind,
   MetisSessionInsight,
   MetisSessionPreview,
   MetisUserAdminRecord,
@@ -35,6 +39,7 @@ function createDb() {
       councilSessions,
       councilMessages,
       sessionInsights,
+      councilLearnings,
     },
   });
 }
@@ -273,6 +278,24 @@ function mapSessionInsight(row: typeof sessionInsights.$inferSelect): MetisSessi
     insight: row.insight,
     rationale: row.rationale ?? null,
     tags: splitTags(row.tags),
+    updatedAt: toTimestamp(row.updatedAt),
+  };
+}
+
+function mapCouncilLearning(row: typeof councilLearnings.$inferSelect): MetisCouncilLearning {
+  return {
+    id: row.id,
+    sessionId: row.sessionId,
+    kind: row.kind,
+    statement: row.statement,
+    confidence: row.confidence,
+    supportingAgents: splitTags(row.supportingAgents),
+    dissent: row.dissent,
+    rationale: row.rationale,
+    tags: splitTags(row.tags),
+    supersedesId: row.supersedesId,
+    supersededAt: row.supersededAt ? row.supersededAt.getTime() : null,
+    createdAt: toTimestamp(row.createdAt),
     updatedAt: toTimestamp(row.updatedAt),
   };
 }
@@ -856,4 +879,169 @@ export async function refreshSessionInsight(input: { sessionId: string; userId: 
     .returning();
 
   return created[0] ? mapSessionInsight(created[0]) : null;
+}
+
+// ---------- councilLearnings (Phase 1 persistent memory) ----------
+
+// Kind ranking reflects how useful each kind of learning is when injected
+// into a future brief. Decisions are the most actionable; open questions
+// are the softest, but still worth surfacing for continuity.
+const LEARNING_KIND_PRIORITY: Record<MetisLearningKind, number> = {
+  decision: 100,
+  commitment: 80,
+  principle: 70,
+  rejected_option: 60,
+  risk: 50,
+  open_question: 30,
+};
+
+// Recency decay: a learning's "freshness" halves every ~60 days. Keeps
+// older learnings available but lets newer ones dominate retrieval.
+const LEARNING_RECENCY_HALF_LIFE_MS = 60 * 24 * 60 * 60 * 1000;
+
+function learningRecencyScore(updatedAtMs: number, nowMs: number): number {
+  const ageMs = Math.max(0, nowMs - updatedAtMs);
+  return Math.pow(0.5, ageMs / LEARNING_RECENCY_HALF_LIFE_MS);
+}
+
+export async function persistExtractedLearnings(input: {
+  sessionId: string;
+  userId: number;
+  learnings: ExtractedLearning[];
+}): Promise<MetisCouncilLearning[]> {
+  if (input.learnings.length === 0) return [];
+
+  const db = getDb();
+  const now = new Date();
+
+  const rows = input.learnings.map((entry) => ({
+    sessionId: input.sessionId,
+    userId: input.userId,
+    kind: entry.kind,
+    statement: entry.statement,
+    confidence: entry.confidence,
+    supportingAgents:
+      entry.supportingAgents.length > 0 ? entry.supportingAgents.join(", ") : null,
+    dissent: entry.dissent,
+    rationale: entry.rationale,
+    tags: entry.tags.length > 0 ? entry.tags.join(", ") : null,
+    createdAt: now,
+    updatedAt: now,
+  }));
+
+  // If the same session is re-processed we replace its learnings rather
+  // than doubling them up. Phase 4 will add smarter merging.
+  await db.delete(councilLearnings).where(eq(councilLearnings.sessionId, input.sessionId));
+
+  const inserted = await db.insert(councilLearnings).values(rows).returning();
+  return inserted.map(mapCouncilLearning);
+}
+
+export async function listRelevantLearnings(input: {
+  userId: number;
+  query?: string;
+  excludeSessionId?: string;
+  kinds?: MetisLearningKind[];
+  limit?: number;
+  includeSuperseded?: boolean;
+}): Promise<MetisCouncilLearning[]> {
+  const db = getDb();
+  const limit = input.limit ?? 6;
+  const now = Date.now();
+
+  const conditions = [eq(councilLearnings.userId, input.userId)];
+
+  if (!input.includeSuperseded) {
+    conditions.push(isNull(councilLearnings.supersededAt));
+  }
+
+  if (input.excludeSessionId) {
+    conditions.push(sql`${councilLearnings.sessionId} <> ${input.excludeSessionId}` as never);
+  }
+
+  if (input.kinds && input.kinds.length > 0) {
+    conditions.push(inArray(councilLearnings.kind, input.kinds));
+  }
+
+  const trimmedQuery = input.query?.trim();
+  if (trimmedQuery) {
+    const pattern = `%${trimmedQuery}%`;
+    conditions.push(
+      or(
+        ilike(councilLearnings.statement, pattern),
+        ilike(councilLearnings.tags, pattern),
+        ilike(councilLearnings.rationale, pattern),
+      ) as never,
+    );
+  }
+
+  // Fetch wider than `limit` and rank in memory. This is fine at current
+  // scale (single user, hundreds of learnings at most). Phase 3 replaces
+  // this with pgvector semantic search.
+  const rows = await db
+    .select()
+    .from(councilLearnings)
+    .where(and(...conditions))
+    .orderBy(desc(councilLearnings.updatedAt))
+    .limit(limit * 4);
+
+  // If the keyword search returned nothing, fall back to the most recent
+  // active learnings. This mirrors the recall-intent behaviour in
+  // listRelevantSessionInsights: better to surface something than nothing.
+  if (rows.length === 0 && trimmedQuery) {
+    const fallbackConditions = [eq(councilLearnings.userId, input.userId)];
+    if (!input.includeSuperseded) {
+      fallbackConditions.push(isNull(councilLearnings.supersededAt));
+    }
+    if (input.excludeSessionId) {
+      fallbackConditions.push(
+        sql`${councilLearnings.sessionId} <> ${input.excludeSessionId}` as never,
+      );
+    }
+
+    const fallbackRows = await db
+      .select()
+      .from(councilLearnings)
+      .where(and(...fallbackConditions))
+      .orderBy(desc(councilLearnings.updatedAt))
+      .limit(limit);
+
+    return fallbackRows.map(mapCouncilLearning);
+  }
+
+  const ranked = rows
+    .map((row) => {
+      const mapped = mapCouncilLearning(row);
+      const kindScore = LEARNING_KIND_PRIORITY[mapped.kind] ?? 0;
+      const recency = learningRecencyScore(mapped.updatedAt, now);
+      const confidenceWeight =
+        mapped.confidence === "firm" ? 1.0 : mapped.confidence === "provisional" ? 0.7 : 0.4;
+      return {
+        mapped,
+        score: kindScore * recency * confidenceWeight,
+      };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((entry) => entry.mapped);
+
+  return ranked;
+}
+
+export async function listLearningsForSession(input: {
+  sessionId: string;
+  userId: number;
+}): Promise<MetisCouncilLearning[]> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(councilLearnings)
+    .where(
+      and(
+        eq(councilLearnings.sessionId, input.sessionId),
+        eq(councilLearnings.userId, input.userId),
+      ),
+    )
+    .orderBy(councilLearnings.id);
+  return rows.map(mapCouncilLearning);
 }

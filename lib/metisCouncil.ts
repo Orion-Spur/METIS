@@ -1,8 +1,10 @@
 import { ENV } from "@/lib/env";
 import { getCompanyProfile } from "@/lib/db";
+import { buildLearningsBlock } from "@/lib/learningPromptInjection";
 import type {
   MetisAgentName,
   MetisAgentOutput,
+  MetisCouncilLearning,
   MetisCouncilMessage,
   MetisCouncilTurn,
   MetisRecommendedAction,
@@ -374,6 +376,7 @@ function buildStructuredPrompt(input: {
   discussion: CouncilContextEntry[];
   companyContext?: string;
   relatedInsights?: MetisSessionInsight[];
+  relatedLearnings?: MetisCouncilLearning[];
   finalSynthesis?: boolean;
 }) {
   const priorAgentMessages = input.discussion.filter((entry) => entry.role !== "user").length;
@@ -385,13 +388,17 @@ function buildStructuredPrompt(input: {
       ? "Reference at least one earlier speaker by name and respond to their reasoning directly. If Orion has interjected, address the latest Orion intervention explicitly."
       : "Establish the first substantive position in the meeting rather than introducing yourself or claiming a fixed role.";
 
+  const hasLearnings = input.relatedLearnings && input.relatedLearnings.length > 0;
+  const hasLegacyInsights = input.relatedInsights && input.relatedInsights.length > 0;
+  const hasAnyMemory = hasLearnings || hasLegacyInsights;
+
   const recallInstruction = recallIntent
     ? priorAgentMessages > 0
       ? "Orion is asking for continuity. Summarize what this live session has actually established so far before reaching for older memory, and keep any cross-session recall clearly labeled as prior memory."
-      : input.relatedInsights && input.relatedInsights.length > 0
-        ? "Orion is asking for continuity in a fresh room. Retrieved prior-session learnings are available, so you must use them directly instead of claiming no memory was retrieved. Open with a clearly labeled prior-memory statement, ground it in at least one retrieved learning, and only then explain how it should shape the current decision."
-        : "Orion is asking for continuity, but no earlier learnings were retrieved. Be explicit about the lack of prior memory instead of pretending this fresh room has already decided something."
-    : "If relevant prior learnings exist, use them deliberately and label them as prior-session memory rather than current-room agreement.";
+      : hasAnyMemory
+        ? "Orion is asking for continuity in a fresh room. Retrieved prior-session memory is available, so you must use it directly instead of claiming no memory was retrieved. Open with a clearly labeled prior-memory statement, ground it in at least one retrieved item, and only then explain how it should shape the current decision."
+        : "Orion is asking for continuity, but no earlier memory was retrieved. Be explicit about the lack of prior memory instead of pretending this fresh room has already decided something."
+    : "If relevant prior memory exists, use it deliberately and label it as prior-session memory rather than current-room agreement.";
 
   const contentInstruction = input.finalSynthesis
     ? "You are producing the final close. Keep it compact, decisive, and under 110 words total across all visible sections. Preserve the most important disagreement instead of burying it."
@@ -404,19 +411,25 @@ function buildStructuredPrompt(input: {
         ? "Your challenge is mandatory. Name the sharpest weakness plainly so the room must deal with it before convergence."
         : "Keep your stance clear, concise, and responsive to the current tension rather than restating the whole case.";
 
-  const insightsBlock = input.relatedInsights && input.relatedInsights.length > 0
-    ? [
-        "Relevant prior learnings:",
-        ...input.relatedInsights.map(
-          (entry, index) =>
-            `${index + 1}. ${entry.title} — ${entry.insight}${entry.rationale ? ` | Rationale: ${entry.rationale}` : ""}`,
-        ),
-      ].join("\n")
-    : "Relevant prior learnings: None retrieved for this brief. Do not invent prior outcomes.";
+  // Prefer the new structured learnings block when we have it. Fall back
+  // to the legacy sessionInsights block only when no learnings have been
+  // extracted yet (early in the rollout, or for sessions that pre-date
+  // Phase 1). Both layers coexist during the transition.
+  const memoryBlock = hasLearnings
+    ? buildLearningsBlock(input.relatedLearnings)
+    : hasLegacyInsights
+      ? [
+          "Prior council memory (legacy):",
+          ...(input.relatedInsights ?? []).map(
+            (entry, index) =>
+              `${index + 1}. ${entry.title} — ${entry.insight}${entry.rationale ? ` | Rationale: ${entry.rationale}` : ""}`,
+          ),
+        ].join("\n")
+      : "Prior council memory: None retrieved for this brief. Do not invent prior outcomes.";
 
   return [
     input.companyContext ?? "Company context: No company profile has been configured yet.",
-    insightsBlock,
+    memoryBlock,
     `Council brief:\n${input.brief}`,
     `Stage direction:\n${input.stageDirection}`,
     `Current discussion transcript:\n${formatTranscript(input.discussion)}`,
@@ -427,7 +440,7 @@ function buildStructuredPrompt(input: {
     "Council response format is mandatory.",
     "Return valid JSON only with exactly these fields: position, keyReasoning, challenge, confidence, recommendedAction, summaryRationale.",
     "Formatting rules:",
-    recallIntent && !priorAgentMessages && input.relatedInsights && input.relatedInsights.length > 0
+    recallIntent && !priorAgentMessages && hasAnyMemory
       ? "- position: start with 'Prior memory:' and summarize at least one retrieved earlier-session learning before giving the current-room implication, maximum 45 words."
       : "- position: 1 or 2 sentences, maximum 45 words.",
     "- keyReasoning: an array of 1 to 5 short bullet-ready strings, each under 18 words.",
@@ -648,6 +661,7 @@ export async function streamCouncilTurn(input: {
   history?: MetisCouncilTurn[];
   historyEntries?: CouncilContextEntry[];
   relatedInsights?: MetisSessionInsight[];
+  relatedLearnings?: MetisCouncilLearning[];
   onEvent?: (event: StreamedCouncilEvent) => Promise<void> | void;
   shouldStop?: () => Promise<boolean> | boolean;
 }): Promise<StreamCouncilTurnResult> {
@@ -693,6 +707,7 @@ export async function streamCouncilTurn(input: {
         discussion: contextSequence,
         companyContext,
         relatedInsights: input.relatedInsights,
+        relatedLearnings: input.relatedLearnings,
         finalSynthesis: step.kind === "synthesis",
       }),
       { finalSynthesis: step.kind === "synthesis" },

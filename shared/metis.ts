@@ -50,6 +50,42 @@ export type MetisSessionInsight = {
   updatedAt: number;
 };
 
+export type MetisLearningKind =
+  | "decision"
+  | "principle"
+  | "risk"
+  | "open_question"
+  | "rejected_option"
+  | "commitment";
+
+export type MetisLearningConfidence = "firm" | "provisional" | "exploratory";
+
+export type MetisCouncilLearning = {
+  id: number;
+  sessionId: string;
+  kind: MetisLearningKind;
+  statement: string;
+  confidence: MetisLearningConfidence;
+  supportingAgents: string[];
+  dissent: string | null;
+  rationale: string | null;
+  tags: string[];
+  supersedesId: number | null;
+  supersededAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type ExtractedLearning = {
+  kind: MetisLearningKind;
+  statement: string;
+  confidence: MetisLearningConfidence;
+  supportingAgents: MetisAgentName[];
+  dissent: string | null;
+  rationale: string | null;
+  tags: string[];
+};
+
 export type MetisUserAdminRecord = {
   id: number;
   username: string | null;

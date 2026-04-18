@@ -9,6 +9,7 @@ import {
   text,
   timestamp,
   varchar,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
@@ -21,6 +22,21 @@ export const recommendedActionEnum = pgEnum("recommended_action", [
   "defer",
   "escalate",
   "request_clarification",
+]);
+
+export const learningKindEnum = pgEnum("learning_kind", [
+  "decision",
+  "principle",
+  "risk",
+  "open_question",
+  "rejected_option",
+  "commitment",
+]);
+
+export const learningConfidenceEnum = pgEnum("learning_confidence", [
+  "firm",
+  "provisional",
+  "exploratory",
 ]);
 
 export const users = pgTable(
@@ -123,6 +139,38 @@ export const sessionInsights = pgTable(
   ]
 );
 
+export const councilLearnings = pgTable(
+  "councilLearnings",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: varchar("sessionId", { length: 64 })
+      .notNull()
+      .references(() => councilSessions.id, { onDelete: "cascade" }),
+    userId: integer("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: learningKindEnum("kind").notNull(),
+    statement: text("statement").notNull(),
+    confidence: learningConfidenceEnum("confidence").default("provisional").notNull(),
+    supportingAgents: text("supportingAgents"),
+    dissent: text("dissent"),
+    rationale: text("rationale"),
+    tags: text("tags"),
+    supersedesId: integer("supersedesId").references(
+      (): AnyPgColumn => councilLearnings.id,
+      { onDelete: "set null" }
+    ),
+    supersededAt: timestamp("supersededAt", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("council_learnings_user_kind_idx").on(table.userId, table.kind),
+    index("council_learnings_user_updated_idx").on(table.userId, table.updatedAt),
+    index("council_learnings_session_id_idx").on(table.sessionId),
+  ]
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
@@ -137,3 +185,6 @@ export type InsertCouncilMessage = typeof councilMessages.$inferInsert;
 
 export type SessionInsight = typeof sessionInsights.$inferSelect;
 export type InsertSessionInsight = typeof sessionInsights.$inferInsert;
+
+export type CouncilLearning = typeof councilLearnings.$inferSelect;
+export type InsertCouncilLearning = typeof councilLearnings.$inferInsert;
