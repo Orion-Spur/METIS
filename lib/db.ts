@@ -131,6 +131,56 @@ function buildSessionSummary(primary: string | null | undefined, fallback?: stri
   return source ? truncateText(source, 240) : null;
 }
 
+async function buildFallbackSessionInsight(
+  row: typeof councilSessions.$inferSelect,
+  query: string | undefined,
+  fallbackId: number,
+): Promise<MetisSessionInsight | null> {
+  const db = getDb();
+  const trimmedQuery = query?.trim();
+  const synthesisRows = await db
+    .select({
+      content: councilMessages.content,
+      summaryRationale: councilMessages.summaryRationale,
+    })
+    .from(councilMessages)
+    .where(and(eq(councilMessages.sessionId, row.id), eq(councilMessages.role, "synthesis")))
+    .orderBy(desc(councilMessages.createdAt))
+    .limit(1);
+
+  let matchedText: string | null = null;
+
+  if (trimmedQuery) {
+    const pattern = `%${trimmedQuery}%`;
+    const matchedMessage = await db
+      .select({ content: councilMessages.content })
+      .from(councilMessages)
+      .where(and(eq(councilMessages.sessionId, row.id), ilike(councilMessages.content, pattern)))
+      .orderBy(desc(councilMessages.createdAt))
+      .limit(1);
+
+    matchedText = matchedMessage[0]?.content ? truncateText(matchedMessage[0].content, 160) : null;
+  }
+
+  const synthesis = synthesisRows[0];
+  const title = row.title?.trim() || "Untitled council session";
+  const insight = buildSessionSummary(row.summary, matchedText ?? synthesis?.content);
+
+  if (!insight) {
+    return null;
+  }
+
+  return {
+    id: -fallbackId,
+    sessionId: row.id,
+    title,
+    insight,
+    rationale: synthesis?.summaryRationale?.trim() || null,
+    tags: deriveInsightTags(title, row.summary, matchedText, synthesis?.content),
+    updatedAt: toTimestamp(row.updatedAt),
+  };
+}
+
 function mapAgentMessage(row: typeof councilMessages.$inferSelect): MetisCouncilMessage {
   return {
     sequenceOrder: row.sequenceOrder,
@@ -702,14 +752,15 @@ export async function listRelevantSessionInsights(input: {
   const db = getDb();
   const trimmedQuery = input.query?.trim();
   const pattern = trimmedQuery ? `%${trimmedQuery}%` : undefined;
-  const conditions = [eq(sessionInsights.userId, input.userId)];
+  const limit = input.limit ?? 3;
+  const insightConditions = [eq(sessionInsights.userId, input.userId)];
 
   if (input.excludeSessionId) {
-    conditions.push(sql`${sessionInsights.sessionId} <> ${input.excludeSessionId}` as never);
+    insightConditions.push(sql`${sessionInsights.sessionId} <> ${input.excludeSessionId}` as never);
   }
 
   if (pattern) {
-    conditions.push(
+    insightConditions.push(
       or(
         ilike(sessionInsights.title, pattern),
         ilike(sessionInsights.insight, pattern),
@@ -721,11 +772,47 @@ export async function listRelevantSessionInsights(input: {
   const rows = await db
     .select()
     .from(sessionInsights)
-    .where(and(...conditions))
+    .where(and(...insightConditions))
     .orderBy(desc(sessionInsights.updatedAt))
-    .limit(input.limit ?? 3);
+    .limit(limit);
 
-  return rows.map(mapSessionInsight);
+  if (rows.length > 0) {
+    return rows.map(mapSessionInsight);
+  }
+
+  const sessionConditions = [eq(councilSessions.userId, input.userId)];
+
+  if (input.excludeSessionId) {
+    sessionConditions.push(sql`${councilSessions.id} <> ${input.excludeSessionId}` as never);
+  }
+
+  if (pattern) {
+    sessionConditions.push(
+      or(
+        ilike(councilSessions.title, pattern),
+        ilike(councilSessions.summary, pattern),
+        sql<boolean>`exists (
+          select 1
+          from "councilMessages" cm
+          where cm."sessionId" = ${councilSessions.id}
+            and cm."content" ilike ${pattern}
+        )`,
+      ) as never,
+    );
+  }
+
+  const fallbackSessions = await db
+    .select()
+    .from(councilSessions)
+    .where(and(...sessionConditions))
+    .orderBy(desc(councilSessions.updatedAt))
+    .limit(limit);
+
+  const fallbackInsights = await Promise.all(
+    fallbackSessions.map((row, index) => buildFallbackSessionInsight(row, trimmedQuery, index + 1)),
+  );
+
+  return fallbackInsights.filter((entry): entry is MetisSessionInsight => Boolean(entry));
 }
 
 export async function refreshSessionInsight(input: { sessionId: string; userId: number }) {

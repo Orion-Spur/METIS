@@ -21,6 +21,54 @@ function buildMessage(partial: Partial<MetisCouncilMessage> & Pick<MetisCouncilM
 }
 
 describe("METIS persistence search and insight helpers", () => {
+  it("retrieves past sessions through a fallback path even when no curated session insight exists", async () => {
+    const user = await findUserByIdentifier("orion");
+    expect(user?.id).toBeTypeOf("number");
+
+    const token = `fallback-memory-${Date.now()}`;
+    const opener = `Revisit the ${token} architecture path before broader rollout.`;
+
+    const started = await startCouncilSessionTurn({
+      userId: user!.id,
+      username: user!.username ?? "orion",
+      userMessage: opener,
+    });
+
+    await appendCouncilMessage({
+      sessionId: started.sessionId,
+      role: "agent",
+      message: buildMessage({
+        agentName: "Athena",
+        content: `Athena says the ${token} sequence should stay narrow until evidence is clean.`,
+        recommendedAction: "revise",
+        summaryRationale: "The room should sequence architecture before expansion.",
+      }),
+    });
+
+    await appendCouncilMessage({
+      sessionId: started.sessionId,
+      role: "synthesis",
+      message: buildMessage({
+        agentName: "Metis",
+        content: `Prioritise the ${token} architecture path in one narrow proving lane before adding more surfaces.`,
+        recommendedAction: "proceed",
+        summaryRationale: `Keep the ${token} work narrow first so the council can recall a clear operating lesson later.`,
+      }),
+    });
+
+    const fallbackInsights = await listRelevantSessionInsights({
+      userId: user!.id,
+      query: token,
+      excludeSessionId: "non-matching-session",
+      limit: 5,
+    });
+    const matchingFallback = fallbackInsights.find((entry) => entry.sessionId === started.sessionId);
+
+    expect(matchingFallback).toBeTruthy();
+    expect(matchingFallback?.insight).toContain(token);
+    expect(matchingFallback?.id).toBeLessThan(0);
+  }, 30000);
+
   it("refreshes a reusable session insight and makes the session searchable by transcript content", async () => {
     const user = await findUserByIdentifier("orion");
     expect(user?.id).toBeTypeOf("number");
