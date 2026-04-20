@@ -15,6 +15,12 @@ const envSchema = z.object({
   AZUREGROK42_MODEL: z.string().default("grok-4-20-reasoning"),
   ANTHROPIC_MODEL: z.string().default("claude-opus-4-7"),
   METIS_LEARNING_EXTRACTOR_MODEL: z.string().default("claude-haiku-4-5-20251001"),
+  // Model used for the chair director's routing decisions (not for the
+  // chair's spoken turns — those use ANTHROPIC_MODEL). Defaults to Haiku
+  // because the director's job is structured JSON output against a rules
+  // prompt, not deep reasoning. Swap to any Anthropic-compatible model
+  // without a code change by setting this env var.
+  METIS_DIRECTOR_MODEL: z.string().default("claude-haiku-4-5-20251001"),
 });
 
 export const ENV = envSchema.parse({
@@ -32,4 +38,5 @@ export const ENV = envSchema.parse({
   AZUREGROK42_MODEL: process.env.AZUREGROK42_MODEL,
   ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
   METIS_LEARNING_EXTRACTOR_MODEL: process.env.METIS_LEARNING_EXTRACTOR_MODEL,
+  METIS_DIRECTOR_MODEL: process.env.METIS_DIRECTOR_MODEL,
 });

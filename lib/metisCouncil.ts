@@ -34,6 +34,9 @@ const specialistPrompts: Record<Exclude<MetisAgentName, "Metis">, string> = {
 const chairOpeningPrompt =
   "You are Metis, chair of the METIS council. This is the opening of the meeting. Define the crux of the brief, identify the central tension, contribute your own first framing, and set the room up for a productive debate. Keep the other participants fluid and unlabeled. Your view is provisional — do not declare anything settled. Summarize your point succinctly.";
 
+const chairSpeaksPrompt =
+  "You are Metis, chair of the METIS council, speaking live in the room. You are not opening or closing the meeting — you are intervening mid-debate because you have something substantive to add that no specialist has surfaced. Reframe a tension, name a gap, press an assumption, or sharpen the decision criteria. Engage prior speakers by name and respond to their reasoning directly. Your position is still provisional at this stage — do not declare the decision settled. Keep it concise and land the point.";
+
 const synthesisPrompt =
   "You are Metis, chair of the METIS council. Produce the closing synthesis after the live discussion for Orion. Integrate the strongest arguments from the room, preserve the disagreement that still matters, state what the council is betting on, and end with one decisive recommended next action. Do not flatten real tensions merely to create agreement.";
 
@@ -51,7 +54,7 @@ export type StreamedCouncilEvent = {
   kind: "discussion" | "synthesis" | "chair_directive";
   message?: MetisCouncilMessage;
   directive?: {
-    action: "call_specialist" | "call_round" | "deadlock" | "synthesise";
+    action: "call_specialist" | "call_round" | "chair_speaks" | "deadlock" | "synthesise";
     target: MetisAgentName | null;
     directive: string;
     rationale: string;
@@ -861,6 +864,38 @@ export async function streamCouncilTurn(input: {
       interventionLearning && directive.memoryIntervention
         ? { learning: interventionLearning, reason: directive.memoryIntervention.reason }
         : null;
+
+    if (directive.action === "chair_speaks") {
+      if ((await input.shouldStop?.()) === true) {
+        return { sessionId: input.sessionId, userMessage: input.userMessage, discussion, synthesis, createdAt, completed: false, deadlockReason };
+      }
+      // Metis speaks mid-debate. Uses the full Anthropic model (Opus), not
+      // the cheaper director model, because this is a substantive turn.
+      const chairOutput = await invokeAgent(
+        "Metis",
+        chairSpeaksPrompt,
+        buildStructuredPrompt({
+          agentName: "Metis",
+          brief: input.userMessage,
+          stageDirection: directive.directive,
+          discussion: contextSequence,
+          companyContext,
+          relatedInsights: input.relatedInsights,
+          relatedLearnings: input.relatedLearnings,
+          memoryIntervention,
+          finalSynthesis: false,
+        }),
+        {
+          finalSynthesis: false,
+          memoryIntervention: memoryIntervention
+            ? { learningId: memoryIntervention.learning.id, reason: memoryIntervention.reason }
+            : null,
+        },
+      );
+      const chairMessage = asDiscussionMessage(chairOutput, discussion.length + 1);
+      await pushAgentMessage(chairMessage, "discussion");
+      continue;
+    }
 
     if (directive.action === "call_specialist" && directive.target) {
       if ((await input.shouldStop?.()) === true) {

@@ -9,10 +9,18 @@ import type {
 // ---------- Schema ----------
 
 const chairDirectiveSchema = z.object({
-  action: z.enum(["call_specialist", "call_round", "deadlock", "synthesise"]),
+  action: z.enum([
+    "call_specialist",
+    "call_round",
+    "chair_speaks",
+    "deadlock",
+    "synthesise",
+  ]),
+  // Target is only meaningful for call_specialist. For chair_speaks we
+  // implicitly target Metis. For all other actions target should be null.
   target: z.enum(["Athena", "Argus", "Loki"]).nullable().default(null),
-  // Directive and rationale can be long — Opus will sometimes produce
-  // rich, specific direction. We truncate rather than reject.
+  // Widened from 400 to 2000 — real Opus output in a rich debate easily
+  // runs past 400 characters, and we truncate rather than reject.
   directive: z.string().min(10).max(2000),
   rationale: z.string().min(10).max(2000),
   memoryIntervention: z
@@ -28,36 +36,41 @@ export type ChairDirective = z.infer<typeof chairDirectiveSchema>;
 
 // ---------- System prompt ----------
 
-const DIRECTOR_SYSTEM_PROMPT = `You are Metis, chair of the METIS council. This is NOT a turn where you speak to the room. This is a turn where you decide what happens next in the live debate.
+const DIRECTOR_SYSTEM_PROMPT = `You are Metis, chair of the METIS council, deciding what happens next in a live debate. You are not speaking to the room on this turn. You are choosing the next move.
 
-You have four possible moves:
+You are the most capable thinker in the room. Your role is to LEAD the thinking, not just route between others. If the room is missing a frame, an angle, or a sharper formulation that only you can provide, you should speak yourself rather than delegate. Specialists contribute their specialties; you contribute your judgement, synthesis, and willingness to reframe. A chair who only delegates is a chair who has abdicated.
 
-- call_specialist: direct exactly one specialist (Athena, Argus, or Loki) to respond with a specific directive. Use when you want one voice, sharpened, on a specific point.
+You have FIVE possible moves:
+
+- chair_speaks: you speak to the room yourself on your next turn. Use this when you have a reframe, a tension to name, a gap no specialist is seeing, a challenge only the chair can credibly make, or when you need to steer the debate before closing it. Speak at least as often as you delegate when you have something substantive to add.
+- call_specialist: direct Athena, Argus, or Loki to respond with a specific directive. Use when one targeted voice will unblock the room.
 - call_round: bring all three specialists back in sequence with a shared directive. Use when the room needs another full pass.
-- deadlock: formally declare the room cannot converge, and the reasons will be carried into the synthesis. Use rarely — only when no further round will produce new material.
-- synthesise: close the meeting and produce the final synthesis. You may only choose this if the challenge round has completed (Loki has delivered at least one explicit challenge AND every specialist has spoken at least twice) and you judge the room is ready.
+- deadlock: formally declare the room cannot converge. Use rarely — only when no further round will produce new material.
+- synthesise: close the meeting and produce the final synthesis. You may only choose this if the challenge round has completed (every specialist has spoken at least twice AND Loki has delivered explicit challenge) and you judge the room is ready.
 
 RULES
 
-1. You cannot choose synthesise before the challenge round has completed. If you try, your decision will be rejected.
-2. Prefer call_specialist over call_round when one targeted voice will unblock the room. Full rounds are expensive; use them when you need all angles.
-3. Your directive to the specialist must be concrete. "Respond to Loki's objection about SDR baseline with a specific measurable threshold" is good. "Continue the discussion" is not.
-4. If a relevant prior learning exists in memory, you may attach a memoryIntervention. Use this when a prior decision or principle from a past session is directly relevant to the current argument — the specialist will be told to address it by name. Use this AGGRESSIVELY when the room is relitigating something already decided.
-5. Your rationale should explain WHY this move advances the room. One or two sentences.
+1. You cannot choose synthesise before the challenge round has completed. If you try, your decision will be rejected and replaced with call_round.
+2. Do NOT be deferential. When you have a view, speak. When a specialist has made a gap-laden argument, do not quietly move on — either speak yourself to name the gap, or direct a specialist to address it.
+3. When memory is relevant, use it AGGRESSIVELY. If a retrieved prior learning bears on the current argument — especially a firm decision the room is relitigating — attach a memoryIntervention and direct a specialist to address it by name. Use memory as authority, not just reference.
+4. Your directive must be concrete and specific. "Respond to Loki's claim about enterprise perception with a price-point benchmark" is good. "Continue the discussion" is not.
+5. Your rationale should explain why this move advances the room. One or two sentences.
+
+BIAS TOWARD SPEAKING. If you are uncertain whether to speak or delegate, and you have something to add, speak. The council is not best served by a silent chair.
 
 OUTPUT FORMAT
 
 Return ONLY valid JSON matching this exact shape, no prose, no markdown:
 
 {
-  "action": "call_specialist" | "call_round" | "deadlock" | "synthesise",
+  "action": "chair_speaks" | "call_specialist" | "call_round" | "deadlock" | "synthesise",
   "target": "Athena" | "Argus" | "Loki" | null,
-  "directive": "The concrete instruction to the specialist (or to all specialists, for call_round). Required.",
+  "directive": "Concrete instruction (to the specialist if call_specialist, to yourself as a brief for your next spoken turn if chair_speaks, to all specialists for call_round). Required for all actions.",
   "rationale": "Why this move advances the room. Required.",
   "memoryIntervention": null | { "learningId": <id>, "reason": "why this prior learning must be addressed now" }
 }
 
-target must be set when action is call_specialist. target must be null for other actions.`;
+target must be set when action is call_specialist. target must be null for chair_speaks and all other actions.`;
 
 // ---------- User prompt construction ----------
 
@@ -85,19 +98,52 @@ function formatMemoryForChair(learnings: MetisCouncilLearning[]): string {
   return lines.join("\n");
 }
 
+function countChairTurnsSinceLastChair(discussion: MetisCouncilMessage[]): {
+  specialistsSinceChair: number;
+  chairTurnsTotal: number;
+} {
+  let specialistsSinceChair = 0;
+  let chairTurnsTotal = 0;
+  for (let i = discussion.length - 1; i >= 0; i -= 1) {
+    if (discussion[i].agentName === "Metis") {
+      chairTurnsTotal += 1;
+      if (specialistsSinceChair === 0) {
+        // We're scanning backwards — if we hit Metis before any specialists,
+        // reset the counter and keep counting total chair turns.
+        continue;
+      }
+      break;
+    }
+    specialistsSinceChair += 1;
+  }
+  // Count total chair turns overall (second pass).
+  chairTurnsTotal = discussion.filter((m) => m.agentName === "Metis").length;
+  return { specialistsSinceChair, chairTurnsTotal };
+}
+
 function formatRoundState(input: {
   openingRoundComplete: boolean;
   challengeRoundComplete: boolean;
   elapsedSeconds: number;
   timeoutSeconds: number;
   forceClosureReason: string | null;
+  specialistsSinceChair: number;
+  chairTurnsTotal: number;
 }): string {
   const lines = [
     "Current round state:",
     `- Opening round complete: ${input.openingRoundComplete ? "yes" : "no"}`,
     `- Challenge round complete: ${input.challengeRoundComplete ? "yes" : "no (synthesise is not yet allowed)"}`,
     `- Elapsed time: ${input.elapsedSeconds}s of ${input.timeoutSeconds}s budget`,
+    `- Chair (Metis) turns so far: ${input.chairTurnsTotal}`,
+    `- Specialists spoken since last chair turn: ${input.specialistsSinceChair}`,
   ];
+
+  if (input.specialistsSinceChair >= 3) {
+    lines.push(
+      "- CHAIR PROMPT: three or more specialists have spoken since your last turn. Consider whether you should speak now (chair_speaks) rather than delegate another turn. If you have a reframe, tension to name, or gap to surface, do it."
+    );
+  }
 
   if (input.forceClosureReason) {
     lines.push(
@@ -137,6 +183,10 @@ export async function decideNextMove(input: {
   }
 
   const fetchImpl = input.fetchImpl ?? fetch;
+  const { specialistsSinceChair, chairTurnsTotal } = countChairTurnsSinceLastChair(
+    input.discussion
+  );
+
   const userPrompt = [
     `Council brief from Orion:\n${input.brief}`,
     formatMemoryForChair(input.availableLearnings),
@@ -146,14 +196,16 @@ export async function decideNextMove(input: {
       elapsedSeconds: input.elapsedSeconds,
       timeoutSeconds: input.timeoutSeconds,
       forceClosureReason: input.forceClosureReason,
+      specialistsSinceChair,
+      chairTurnsTotal,
     }),
     `Transcript so far:\n${formatTranscript(input.discussion)}`,
     "Decide the next move. Return JSON only.",
   ].join("\n\n");
 
   const body = {
-    model: input.model ?? ENV.ANTHROPIC_MODEL,
-    max_tokens: 600,
+    model: input.model ?? ENV.METIS_DIRECTOR_MODEL,
+    max_tokens: 800,
     system: DIRECTOR_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userPrompt }],
   };
@@ -242,8 +294,7 @@ function enforceDirectiveRules(
     return { ...directive, target: null };
   }
 
-  // call_specialist must have a target; default to Loki if missing
-  // (Loki is the safest default — additional challenge rarely hurts).
+  // call_specialist must have a target; default to Loki if missing.
   if (directive.action === "call_specialist" && !directive.target) {
     return { ...directive, target: "Loki" };
   }

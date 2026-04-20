@@ -339,4 +339,94 @@ describe("decideNextMove", () => {
       })
     ).rejects.toThrow(/500/);
   });
+
+  it("passes chair_speaks through with target nulled", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      mockAnthropicResponse({
+        action: "chair_speaks",
+        target: null,
+        directive: "Reframe the debate: both specialists are arguing about volume but neither has named the cost ceiling.",
+        rationale: "The room is missing the cost dimension entirely.",
+        memoryIntervention: null,
+      })
+    );
+
+    const result = await decideNextMove({
+      brief: "Pricing question.",
+      discussion: [buildMessage({ agentName: "Athena", content: "Go high." }), buildMessage({ agentName: "Argus", content: "Go low." })],
+      availableLearnings: [],
+      openingRoundComplete: true,
+      challengeRoundComplete: false,
+      elapsedSeconds: 30,
+      timeoutSeconds: 270,
+      forceClosureReason: null,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      apiKey: "test-key",
+    });
+
+    expect(result.action).toBe("chair_speaks");
+    expect(result.target).toBeNull();
+    expect(result.directive).toContain("cost ceiling");
+  });
+
+  it("nulls target when chair_speaks is returned with a target", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      mockAnthropicResponse({
+        action: "chair_speaks",
+        target: "Athena",
+        directive: "Chair intervention on the pricing question before the next round.",
+        rationale: "Chair has a reframe to offer on the pricing tension.",
+        memoryIntervention: null,
+      })
+    );
+
+    const result = await decideNextMove({
+      brief: "x",
+      discussion: [],
+      availableLearnings: [],
+      openingRoundComplete: true,
+      challengeRoundComplete: false,
+      elapsedSeconds: 30,
+      timeoutSeconds: 270,
+      forceClosureReason: null,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      apiKey: "test-key",
+    });
+
+    expect(result.action).toBe("chair_speaks");
+    expect(result.target).toBeNull();
+  });
+
+  it("accepts a long directive that would have failed the old 400-char limit", async () => {
+    // A realistic rich directive that runs past 400 chars — this used to
+    // crash the session before the schema was widened.
+    const longDirective = "Athena, respond specifically to Argus's 40% uptake assumption by naming the evidence base for that figure. If no pre-existing benchmark exists in the room, the AXS Passport routing proposal becomes a design without a foundation and we need to know whether to keep building it or strip back to the simpler optional model that Metis proposed. Be specific about what evidence would be sufficient to keep the proposal alive.";
+    expect(longDirective.length).toBeGreaterThan(400);
+
+    const fetchImpl = vi.fn().mockResolvedValue(
+      mockAnthropicResponse({
+        action: "call_specialist",
+        target: "Athena",
+        directive: longDirective,
+        rationale: "Athena's argument rests on an unsourced uptake claim that needs evidence.",
+        memoryIntervention: null,
+      })
+    );
+
+    const result = await decideNextMove({
+      brief: "x",
+      discussion: [],
+      availableLearnings: [],
+      openingRoundComplete: true,
+      challengeRoundComplete: false,
+      elapsedSeconds: 30,
+      timeoutSeconds: 270,
+      forceClosureReason: null,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      apiKey: "test-key",
+    });
+
+    expect(result.action).toBe("call_specialist");
+    expect(result.directive).toBe(longDirective);
+  });
 });
