@@ -24,21 +24,21 @@ const recommendedActions = [
 
 const specialistPrompts: Record<Exclude<MetisAgentName, "Metis">, string> = {
   Athena:
-    "You are Athena of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room find direction by clarifying the decision, sequencing choices, and turning ambiguity into a workable path. Engage the strongest prior arguments directly and push the discussion toward an actionable shape. Keep your intervention concise and land your point cleanly. Summarize your point succinctly using a few bullet points if needed. Do not label sections as 'Position' or 'Key Reasoning'—let the structure emerge naturally from your argument.",
+    "You are Athena of the METIS council. You think in sequencing and practical pathways — turning ambiguity into a workable direction. Write naturally, in your own voice. You can use paragraphs, sentences, or a short list of steps when sequencing genuinely calls for it — but do not force structure that isn't there. Engage prior speakers by name and respond to their reasoning directly. Be clear, be specific, and land the point. Keep your intervention tight — under 120 words in the visible content — and resist the urge to restate arguments already in the room.",
   Argus:
-    "You are Argus of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room test evidence, examine assumptions, quantify trade-offs, and expose missing information with precision. Challenge earlier claims directly and raise the standard of proof when the case is weak. Keep your intervention concise and evidentially sharp. Summarize your point succinctly using a few bullet points if needed. Do not label sections as 'Position' or 'Key Reasoning'—let the structure emerge naturally from your argument. When challenging, prefer numbers, thresholds, or concrete examples over general caution.",
+    "You are Argus of the METIS council. You are clinical and evidence-driven. You test claims, expose missing data, and prefer numbers or thresholds over general caution. Write naturally — sentences and paragraphs, not templated bullets. If you need to list specific numbers or criteria, do so, but only where precision actually helps. Engage prior speakers by name and challenge their reasoning on specifics. Be terse where you can, expansive only where quantification demands it. Keep your intervention under 120 words in the visible content.",
   Loki:
-    "You are Loki of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room stress-test its thinking by challenging weak logic, exposing execution risk, and preventing comfortable consensus. Attack the most fragile assumption on the table and force the debate to become more concrete. Your pressure is required before the chair can close the discussion, so do not soften your critique. Name the likely consequence of getting this wrong. Summarize your point succinctly using a few bullet points if needed.",
+    "You are Loki of the METIS council. Your voice is sharp, acerbic, and short. You attack the weakest assumption, name the failure mode, and force the debate to become concrete. You write in short sentences. You do not soften. You do not use tidy bullet lists — the shape of your attack is the point. When you challenge a speaker, you name them. Your pressure is required before the chair can converge, so do not go quiet. Keep your intervention under 100 words in the visible content. Shorter is stronger.",
 };
 
 const chairOpeningPrompt =
-  "You are Metis, chair of the METIS council. This is the opening of the meeting. Define the crux of the brief, identify the central tension, contribute your own first framing, and set the room up for a productive debate. Keep the other participants fluid and unlabeled. Your view is provisional — do not declare anything settled. Summarize your point succinctly.";
+  "You are Metis, chair of the METIS council. This is the opening of the meeting. Your voice is considered and analytical — you think in tensions, reframes, and crux points. Write naturally, in your own voice. Define the crux of the brief, name the central tension, and contribute your first framing. Your view is provisional at this stage — do not declare anything settled. Keep it tight, under 130 words, and avoid the 'pros and cons' template. Shape the room's thinking rather than surveying it.";
 
 const chairSpeaksPrompt =
-  "You are Metis, chair of the METIS council, speaking live in the room. You are not opening or closing the meeting — you are intervening mid-debate because you have something substantive to add that no specialist has surfaced. Reframe a tension, name a gap, press an assumption, or sharpen the decision criteria. Engage prior speakers by name and respond to their reasoning directly. Your position is still provisional at this stage — do not declare the decision settled. Keep it concise and land the point.";
+  "You are Metis, chair of the METIS council, intervening live in the room. You are speaking because you have something substantive to add that no specialist has surfaced — a reframe, a tension to name, a gap to press, or a challenge only the chair can credibly make. Write naturally, in your own voice. Engage prior speakers by name and respond to their reasoning directly. Your position is still provisional — do not declare the decision settled yet. Keep it under 130 words. Land the point.";
 
 const synthesisPrompt =
-  "You are Metis, chair of the METIS council. Produce the closing synthesis after the live discussion for Orion. Integrate the strongest arguments from the room, preserve the disagreement that still matters, state what the council is betting on, and end with one decisive recommended next action. Do not flatten real tensions merely to create agreement.";
+  "You are Metis, chair of the METIS council. Produce the closing synthesis for Orion. Integrate the strongest arguments from the room, preserve the disagreement that still matters, state clearly what the council is betting on, and end with one decisive recommended next action. Write as a considered close, not a summary bullet list. Do not flatten real tensions merely to create agreement. Keep it under 160 words.";
 
 export type CouncilContextEntry = {
   role: "user" | "agent" | "synthesis";
@@ -72,6 +72,10 @@ export type StreamCouncilTurnResult = {
 };
 
 type StructuredCouncilPayload = Partial<MetisAgentOutput> & {
+  // The old position/keyReasoning/challenge split is removed in Phase 2.2.
+  // Content is now free-form prose. We keep the partials as optional for
+  // backwards compatibility with any stored or in-flight data, but the
+  // builder no longer emits them.
   position?: string;
   keyReasoning?: string[];
   challenge?: string;
@@ -82,12 +86,11 @@ type CouncilRoundState = {
   challengeRoundComplete: boolean;
 };
 
-const POSITION_WORD_LIMIT = 45;
-const REASONING_WORD_LIMIT = 18;
-const CHALLENGE_WORD_LIMIT = 18;
-const SUMMARY_WORD_LIMIT = 20;
-const DISCUSSION_REASONING_LIMIT = 3;
-const SYNTHESIS_REASONING_LIMIT = 4;
+// Word budgets for the free-form content. Enforced by truncation on the
+// server side so the agents can't run away with a 400-word monologue.
+const DISCUSSION_CONTENT_WORD_LIMIT = 140; // specialists mid-debate
+const SYNTHESIS_CONTENT_WORD_LIMIT = 180;  // closing synthesis
+const SUMMARY_WORD_LIMIT = 22;              // machine-readable summaryRationale
 
 // Hard upper bound on chair-directed moves. The chair has free rein within
 // this ceiling. Set high enough that normal sessions never hit it; acts
@@ -131,47 +134,78 @@ function truncateWords(value: unknown, wordLimit: number) {
   return `${words.slice(0, wordLimit).join(" ")}…`;
 }
 
+// Preserve paragraph breaks and list formatting while still capping total
+// word count. Returns a normalised string that agents can keep their shape
+// in: short paragraphs, occasional bullets, tight sentences.
+// Exported for testing. Keep in sync with the internal signatures.
+export {
+  truncateContent as truncateContentForTest,
+  enforceCompactPayload as enforceCompactPayloadForTest,
+  formatStructuredContent as formatStructuredContentForTest,
+};
+
+// Preserve paragraph breaks and list formatting while still capping total
+// word count. Returns a normalised string that agents can keep their shape
+// in: short paragraphs, occasional bullets, tight sentences.
+function truncateContent(value: unknown, wordLimit: number): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return "No content returned.";
+  }
+
+  // Count words across the whole string, not per-line. If under the limit,
+  // return untouched so we preserve newlines, bullets, and paragraph breaks.
+  const allWords = raw.split(/\s+/).filter(Boolean);
+  if (allWords.length <= wordLimit) {
+    return raw;
+  }
+
+  // Over budget: walk token-by-token until we hit the limit, cutting
+  // cleanly at a word boundary. Preserves newlines that fall within the
+  // budget.
+  let count = 0;
+  const out: string[] = [];
+  const tokens = raw.split(/(\s+)/); // keep whitespace tokens
+  for (const tok of tokens) {
+    if (/^\s+$/.test(tok)) {
+      out.push(tok);
+      continue;
+    }
+    if (count >= wordLimit) break;
+    out.push(tok);
+    count += 1;
+  }
+  return `${out.join("").trimEnd()}…`;
+}
+
 function enforceCompactPayload(parsed: StructuredCouncilPayload, finalSynthesis = false): StructuredCouncilPayload {
-  const reasoningLimit = finalSynthesis ? SYNTHESIS_REASONING_LIMIT : DISCUSSION_REASONING_LIMIT;
-  const keyReasoningSource = Array.isArray(parsed.keyReasoning) && parsed.keyReasoning.length > 0
-    ? parsed.keyReasoning
-    : [parsed.summaryRationale ?? parsed.position ?? parsed.content ?? "No supporting reasoning returned."];
+  const contentLimit = finalSynthesis
+    ? SYNTHESIS_CONTENT_WORD_LIMIT
+    : DISCUSSION_CONTENT_WORD_LIMIT;
+
+  const content = truncateContent(
+    parsed.content ?? parsed.position ?? parsed.summaryRationale ?? "No content returned.",
+    contentLimit,
+  );
+
+  const summaryRationale = truncateWords(
+    parsed.summaryRationale ?? parsed.content ?? parsed.position ?? "No rationale returned.",
+    SUMMARY_WORD_LIMIT,
+  );
 
   return {
     ...parsed,
-    position: truncateWords(parsed.position ?? parsed.content ?? "No position returned.", POSITION_WORD_LIMIT),
-    keyReasoning: keyReasoningSource
-      .map((item) => truncateWords(item, REASONING_WORD_LIMIT))
-      .filter(Boolean)
-      .slice(0, reasoningLimit),
-    challenge: truncateWords(parsed.challenge ?? "No explicit challenge returned.", CHALLENGE_WORD_LIMIT),
-    summaryRationale: truncateWords(parsed.summaryRationale ?? parsed.position ?? parsed.content ?? "No rationale returned.", SUMMARY_WORD_LIMIT),
+    content,
+    summaryRationale,
   };
 }
 
-function formatStructuredContent(parsed: StructuredCouncilPayload) {
-  const position = cleanInlineText(parsed.position ?? parsed.content ?? "No position returned.");
-  const reasoning = Array.isArray(parsed.keyReasoning)
-    ? parsed.keyReasoning.map((item) => cleanInlineText(item)).filter(Boolean)
-    : [];
-  const reasoningLines = reasoning.length > 0
-    ? reasoning.map((item) => `- ${item.replace(/^-+\s*/, "")}`)
-    : [];
-
-  const lines: string[] = [position];
-
-  if (reasoningLines.length > 0) {
-    lines.push("");
-    lines.push(...reasoningLines);
-  }
-
-  const critique = cleanInlineText(parsed.challenge ?? parsed.summaryRationale ?? "");
-  if (critique) {
-    lines.push("");
-    lines.push(critique);
-  }
-
-  return lines.join("\n");
+function formatStructuredContent(parsed: StructuredCouncilPayload): string {
+  // Free-form content is used as-is. No re-shaping into bullet lists, no
+  // "Position: X\n\n- bullet\n\n- bullet" template. Agents write in their
+  // own voice and we respect it.
+  const content = String(parsed.content ?? parsed.position ?? "No content returned.").trim();
+  return content || "No content returned.";
 }
 
 export function getCouncilRoundState(discussion: Array<Pick<MetisCouncilMessage, "agentName">>): CouncilRoundState {
@@ -211,59 +245,34 @@ function extractJson(text: string) {
 }
 
 function parseStructuredFallback(rawText: string): StructuredCouncilPayload {
-  const sections = new Map<string, string[]>();
-  let currentSection = "body";
+  // When the LLM fails to return valid JSON, we treat the entire text
+  // response as the content. We attempt a best-effort extraction of
+  // confidence and recommendedAction if the text happens to mention them,
+  // but the core falls back to "use what the model said as the content."
+  const text = rawText.trim();
 
-  for (const rawLine of rawText.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) {
-      continue;
-    }
-
-    const normalizedHeading = line
-      .replace(/^#+\s*/, "")
-      .replace(/[:：]\s*$/, "")
-      .trim()
-      .toLowerCase();
-
-    if (["position", "key reasoning", "challenge", "confidence", "recommended action", "summary rationale"].includes(normalizedHeading)) {
-      currentSection = normalizedHeading;
-      if (!sections.has(currentSection)) {
-        sections.set(currentSection, []);
-      }
-      continue;
-    }
-
-    const cleanedLine = line.replace(/^[-*•]\s*/, "");
-    sections.set(currentSection, [...(sections.get(currentSection) ?? []), cleanedLine]);
+  // Try to find a confidence number expressed as a percentage (e.g. "85%")
+  // or as a decimal (e.g. "0.85"). Best-effort only.
+  let confidence = 0.5;
+  const pctMatch = text.match(/\b(\d{1,3})\s*%/);
+  if (pctMatch) {
+    const n = Number(pctMatch[1]) / 100;
+    if (Number.isFinite(n) && n >= 0 && n <= 1) confidence = n;
   }
 
-  const bodyLines = (sections.get("body") ?? []).map((line) => cleanInlineText(line)).filter(Boolean);
-  const keyReasoning = (sections.get("key reasoning") ?? [])
-    .map((line) => cleanInlineText(line))
-    .filter(Boolean)
-    .slice(0, 5);
-  const position = cleanInlineText((sections.get("position") ?? []).join(" ") || bodyLines[0] || "No position returned.");
-  const challenge = cleanInlineText(
-    (sections.get("challenge") ?? []).join(" ") || bodyLines.at(-1) || "No explicit challenge returned.",
-  );
-  const confidenceText = cleanInlineText((sections.get("confidence") ?? []).join(" "));
-  const recommendedActionText = cleanInlineText((sections.get("recommended action") ?? []).join(" ")).toLowerCase();
-  const summaryRationale = cleanInlineText(
-    (sections.get("summary rationale") ?? []).join(" ") || keyReasoning[0] || position,
-  );
-  const confidence = confidenceText.endsWith("%")
-    ? Number(confidenceText.replace(/%$/, "")) / 100
-    : Number(confidenceText || 0.5);
-  const recommendedAction = recommendedActions.find((action) => recommendedActionText.includes(action));
+  // Try to find a recommended action word in the text.
+  const lower = text.toLowerCase();
+  const recommendedAction = recommendedActions.find((action) => lower.includes(action));
+
+  // First sentence makes a reasonable fallback summary if nothing else.
+  const firstSentence = text.split(/(?<=[.!?])\s+/)[0] ?? text;
+  const summaryRationale = cleanInlineText(firstSentence).slice(0, 240);
 
   return {
-    position,
-    keyReasoning: keyReasoning.length > 0 ? keyReasoning : [summaryRationale],
-    challenge,
-    confidence: Number.isFinite(confidence) ? confidence : 0.5,
+    content: text,
+    confidence,
     recommendedAction: recommendedAction ?? "request_clarification",
-    summaryRationale,
+    summaryRationale: summaryRationale || "No rationale returned.",
   };
 }
 
@@ -360,10 +369,10 @@ function buildStructuredPrompt(input: {
     : "If relevant prior memory exists, use it deliberately and label it as prior-session memory rather than current-room agreement.";
 
   const contentInstruction = input.finalSynthesis
-    ? "You are producing the final close. Keep it compact, decisive, and under 110 words total across all visible sections. Preserve the most important disagreement instead of burying it."
-    : "You are speaking live in the meeting. Keep the entire visible response under 90 words total and land the point fast.";
+    ? "You are producing the final close. Write a considered synthesis, not a bullet-list summary. Keep it under 180 words."
+    : "You are speaking live in the meeting. Write in your own voice, naturally. Keep it tight and land the point. Do not restate arguments already in the room — advance them.";
   const convergenceInstruction = input.finalSynthesis
-    ? "You may converge now. Carry Loki's strongest surviving objection into the final challenge line."
+    ? "You may converge now. Carry Loki's strongest surviving objection into the close rather than burying it."
     : input.agentName === "Metis"
       ? "Do not close the decision in this turn. Treat your position as provisional."
       : input.agentName === "Loki"
@@ -401,6 +410,11 @@ function buildStructuredPrompt(input: {
     parts.push(memoryInterventionBlock);
   }
 
+  const recallOpener =
+    recallIntent && !priorAgentMessages && hasAnyMemory
+      ? "Because Orion is asking about prior memory, open your content with 'Prior memory:' and summarise at least one retrieved earlier-session learning before giving the current-room implication."
+      : "";
+
   parts.push(
     `Council brief:\n${input.brief}`,
     `Stage direction:\n${input.stageDirection}`,
@@ -409,16 +423,22 @@ function buildStructuredPrompt(input: {
     recallInstruction,
     contentInstruction,
     convergenceInstruction,
-    "Council response format is mandatory.",
-    "Return valid JSON only with exactly these fields: position, keyReasoning, challenge, confidence, recommendedAction, summaryRationale.",
-    "Formatting rules:",
-    recallIntent && !priorAgentMessages && hasAnyMemory
-      ? "- position: start with 'Prior memory:' and summarize at least one retrieved earlier-session learning before giving the current-room implication, maximum 45 words."
-      : "- position: 1 or 2 sentences, maximum 45 words.",
-    "- keyReasoning: an array of 1 to 5 short bullet-ready strings, each under 18 words.",
-    "- challenge: exactly 1 short bullet-worthy sentence naming the strongest disagreement or risk.",
-    "- summaryRationale: exactly 1 short sentence under 20 words.",
-    "Do not mention JSON, schemas, or formatting rules in the visible content.",
+  );
+
+  if (recallOpener) {
+    parts.push(recallOpener);
+  }
+
+  parts.push(
+    "Response format:",
+    `Return ONLY valid JSON with these four fields and no others: { "content": <string>, "confidence": <number 0-1>, "recommendedAction": <one of: ${recommendedActions.join(
+      ", ",
+    )}>, "summaryRationale": <one short sentence under 22 words> }`,
+    "The content field is free-form prose. Write in your own voice. You may use short paragraphs, occasional bullets where they genuinely help, or tight sentences — whichever serves your point. Do not force a 'position + bullets + challenge' template. Do not add section headers like 'Position:' or 'Key Reasoning:'.",
+    input.finalSynthesis
+      ? "Target length for content: under 180 words."
+      : "Target length for content: under 140 words. Shorter is usually stronger.",
+    "Do not mention JSON, schemas, or formatting rules inside the content.",
   );
 
   return parts.join("\n\n");
