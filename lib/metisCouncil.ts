@@ -782,18 +782,47 @@ export async function streamCouncilTurn(input: {
         forceClosureReason,
       });
     } catch (error) {
-      // If the director call itself fails, fail safely: if we can synthesise,
-      // do it; otherwise surface the error up.
+      // Director calls can fail for a few reasons: schema rejection, rate
+      // limit, transient network error. None of these should kill the
+      // session. Fall back to a safe deterministic choice that keeps the
+      // debate moving and eventually produces a synthesis.
+      console.warn(
+        "[streamCouncilTurn] chair director call failed, falling back",
+        error instanceof Error ? error.message : error,
+      );
+      const errorMessage = error instanceof Error ? error.message : "director error";
+
       if (challengeRoundComplete) {
+        // Challenge round is done; safest move is to synthesise.
         directive = {
           action: "synthesise" as const,
           target: null,
-          directive: "Director call failed; synthesising from current state.",
-          rationale: error instanceof Error ? error.message : "director error",
+          directive: "Director call failed after challenge round completed; synthesising from current state.",
+          rationale: `Fallback after director error: ${errorMessage}`,
+          memoryIntervention: null,
+        };
+      } else if (openingRoundComplete) {
+        // Opening round done, challenge round not yet. Push a call_round to
+        // complete the challenge round, which will then unlock synthesis.
+        directive = {
+          action: "call_round" as const,
+          target: null,
+          directive:
+            "Challenge round required. Each specialist: address the weakest assumption on the table, name one concrete risk, and respond to at least one prior speaker by name.",
+          rationale: `Fallback after director error: ${errorMessage}. Driving debate to challenge-round completion.`,
           memoryIntervention: null,
         };
       } else {
-        throw error;
+        // Shouldn't reach here — opening round is produced deterministically
+        // before the loop — but defensively, also recover.
+        directive = {
+          action: "call_round" as const,
+          target: null,
+          directive:
+            "Deliver the opening positions. Each specialist: state a position on the brief, name the central tension, and acknowledge what is uncertain.",
+          rationale: `Fallback after director error: ${errorMessage}. Driving debate to opening-round completion.`,
+          memoryIntervention: null,
+        };
       }
     }
 

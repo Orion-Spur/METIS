@@ -11,12 +11,14 @@ import type {
 const chairDirectiveSchema = z.object({
   action: z.enum(["call_specialist", "call_round", "deadlock", "synthesise"]),
   target: z.enum(["Athena", "Argus", "Loki"]).nullable().default(null),
-  directive: z.string().min(10).max(400),
-  rationale: z.string().min(10).max(400),
+  // Directive and rationale can be long — Opus will sometimes produce
+  // rich, specific direction. We truncate rather than reject.
+  directive: z.string().min(10).max(2000),
+  rationale: z.string().min(10).max(2000),
   memoryIntervention: z
     .object({
       learningId: z.number().int(),
-      reason: z.string().min(5).max(300),
+      reason: z.string().min(5).max(1000),
     })
     .nullable()
     .default(null),
