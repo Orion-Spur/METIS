@@ -1,12 +1,15 @@
 import { ENV } from "@/lib/env";
 import { getCompanyProfile } from "@/lib/db";
+import { decideNextMove, specialistsForRound } from "@/lib/chairDirector";
 import { buildLearningsBlock } from "@/lib/learningPromptInjection";
+import { shouldForceClosure } from "@/lib/noveltyDetector";
 import type {
   MetisAgentName,
   MetisAgentOutput,
   MetisCouncilLearning,
   MetisCouncilMessage,
   MetisCouncilTurn,
+  MetisMemoryIntervention,
   MetisRecommendedAction,
   MetisSessionInsight,
 } from "@/shared/metis";
@@ -28,11 +31,11 @@ const specialistPrompts: Record<Exclude<MetisAgentName, "Metis">, string> = {
     "You are Loki of the METIS council. Speak as a live participant in the room, not as a static persona or job title. Help the room stress-test its thinking by challenging weak logic, exposing execution risk, and preventing comfortable consensus. Attack the most fragile assumption on the table and force the debate to become more concrete. Your pressure is required before the chair can close the discussion, so do not soften your critique. Name the likely consequence of getting this wrong. Summarize your point succinctly using a few bullet points if needed.",
 };
 
-const chairPrompt =
-  "You are Metis, chair of the METIS council. You are not only moderating the discussion; you are thinking inside it. Lead the meeting by defining the crux, reframing the problem when needed, redirecting the room, surfacing tensions, challenging weak assumptions yourself, and contributing original ideas that move the discussion forward. Keep the other participants fluid and unlabeled rather than reducing them to fixed roles. End each intervention by either advancing the room, narrowing the choice, or forcing a response. Before the closing synthesis, every position you offer is provisional: do not declare the decision settled until at least one full challenge round has happened and Loki has delivered explicit pushback. Summarize your point succinctly.";
+const chairOpeningPrompt =
+  "You are Metis, chair of the METIS council. This is the opening of the meeting. Define the crux of the brief, identify the central tension, contribute your own first framing, and set the room up for a productive debate. Keep the other participants fluid and unlabeled. Your view is provisional — do not declare anything settled. Summarize your point succinctly.";
 
 const synthesisPrompt =
-  "You are Metis, chair of the METIS council. Produce the closing synthesis after the live discussion for Orion. Integrate the strongest arguments from the room, preserve the disagreement that still matters, state what the council is betting on, and end with one decisive recommended next action. Do not flatten real tensions merely to create agreement. You may converge only after Loki has issued the required challenge and the room has completed a full round of pressure and response.";
+  "You are Metis, chair of the METIS council. Produce the closing synthesis after the live discussion for Orion. Integrate the strongest arguments from the room, preserve the disagreement that still matters, state what the council is betting on, and end with one decisive recommended next action. Do not flatten real tensions merely to create agreement.";
 
 export type CouncilContextEntry = {
   role: "user" | "agent" | "synthesis";
@@ -44,16 +47,15 @@ export type CouncilContextEntry = {
   summaryRationale?: string;
 };
 
-type CouncilPlanStep = {
-  kind: "discussion" | "synthesis";
-  agentName: MetisAgentName;
-  systemPrompt: string;
-  stageDirection: string;
-};
-
 export type StreamedCouncilEvent = {
-  kind: "discussion" | "synthesis";
-  message: MetisCouncilMessage;
+  kind: "discussion" | "synthesis" | "chair_directive";
+  message?: MetisCouncilMessage;
+  directive?: {
+    action: "call_specialist" | "call_round" | "deadlock" | "synthesise";
+    target: MetisAgentName | null;
+    directive: string;
+    rationale: string;
+  };
 };
 
 export type StreamCouncilTurnResult = {
@@ -63,6 +65,7 @@ export type StreamCouncilTurnResult = {
   synthesis: MetisCouncilMessage | null;
   createdAt: number;
   completed: boolean;
+  deadlockReason?: string | null;
 };
 
 type StructuredCouncilPayload = Partial<MetisAgentOutput> & {
@@ -83,6 +86,14 @@ const SUMMARY_WORD_LIMIT = 20;
 const DISCUSSION_REASONING_LIMIT = 3;
 const SYNTHESIS_REASONING_LIMIT = 4;
 
+// Hard upper bound on chair-directed moves. The chair has free rein within
+// this ceiling. Set high enough that normal sessions never hit it; acts
+// as a final safety net against runaway loops if everything else fails.
+const MAX_CHAIR_MOVES = 30;
+
+// Default soft timeout for the deliberation. The route can override.
+const DEFAULT_TIMEOUT_SECONDS = 270;
+
 function buildCompanyContextBlock(profile: Awaited<ReturnType<typeof getCompanyProfile>>) {
   if (!profile) {
     return "Company context: No company profile has been configured yet. Use only the live session details and avoid inventing business facts.";
@@ -101,72 +112,6 @@ function buildCompanyContextBlock(profile: Awaited<ReturnType<typeof getCompanyP
     `Geography: ${profile.geography ?? "Not specified."}`,
   ].join("\n");
 }
-
-const councilPlan: CouncilPlanStep[] = [
-  {
-    kind: "discussion",
-    agentName: "Metis",
-    systemPrompt: chairPrompt,
-    stageDirection:
-      "Open the meeting. Restate the brief for Orion's decision, identify the central tension, contribute your own first framing of the problem, then assign the first pass: Athena should shape the path, Argus should test the assumptions, and Loki should attack the weak points. Keep your view provisional and do not close the discussion.",
-  },
-  {
-    kind: "discussion",
-    agentName: "Athena",
-    systemPrompt: specialistPrompts.Athena,
-    stageDirection:
-      "Deliver the opening strategic position. Propose a practical path forward and acknowledge the central tension Metis named.",
-  },
-  {
-    kind: "discussion",
-    agentName: "Argus",
-    systemPrompt: specialistPrompts.Argus,
-    stageDirection:
-      "Respond after reading the chair opening and Athena's position. Validate or challenge the assumptions, identify missing evidence, and sharpen the decision criteria.",
-  },
-  {
-    kind: "discussion",
-    agentName: "Loki",
-    systemPrompt: specialistPrompts.Loki,
-    stageDirection:
-      "Respond after reading the prior speakers. Attack the weakest assumption on the table, expose the most serious execution risk, and make the debate more adversarial and concrete.",
-  },
-  {
-    kind: "discussion",
-    agentName: "Metis",
-    systemPrompt: chairPrompt,
-    stageDirection:
-      "Chair the midpoint of the meeting. Name the most important unresolved tension created by the discussion so far, explicitly reference at least two specialists, add your own provisional view on what is emerging, and demand sharper closing positions. Do not synthesize the final answer yet, and do not act as if the decision is settled.",
-  },
-  {
-    kind: "discussion",
-    agentName: "Athena",
-    systemPrompt: specialistPrompts.Athena,
-    stageDirection:
-      "Revise or defend your strategy after the midpoint intervention. Address at least one criticism by name and tighten the proposed path or sequencing.",
-  },
-  {
-    kind: "discussion",
-    agentName: "Argus",
-    systemPrompt: specialistPrompts.Argus,
-    stageDirection:
-      "Assess whether the revised path now meets an acceptable evidence threshold. Address at least one prior speaker by name and state what still remains uncertain.",
-  },
-  {
-    kind: "discussion",
-    agentName: "Loki",
-    systemPrompt: specialistPrompts.Loki,
-    stageDirection:
-      "Deliver the final required challenge before the chair synthesizes. Address at least one prior claim by name, identify the failure mode that still matters most, and make the strongest case against premature convergence.",
-  },
-  {
-    kind: "synthesis",
-    agentName: "Metis",
-    systemPrompt: synthesisPrompt,
-    stageDirection:
-      "Close the meeting only after the required challenge round has completed. State the council's decision clearly, preserve the most useful disagreement, and end with one clear recommended next action for Orion.",
-  },
-];
 
 function cleanInlineText(value: unknown) {
   return String(value ?? "")
@@ -210,15 +155,13 @@ function formatStructuredContent(parsed: StructuredCouncilPayload) {
     ? reasoning.map((item) => `- ${item.replace(/^-+\s*/, "")}`)
     : [];
 
-  // Build natural output: opening statement, bullets on new lines, closing critique
   const lines: string[] = [position];
-  
+
   if (reasoningLines.length > 0) {
     lines.push("");
     lines.push(...reasoningLines);
   }
 
-  // Include the critique naturally at the end if present
   const critique = cleanInlineText(parsed.challenge ?? parsed.summaryRationale ?? "");
   if (critique) {
     lines.push("");
@@ -324,7 +267,7 @@ function parseStructuredFallback(rawText: string): StructuredCouncilPayload {
 function normaliseOutput(
   agentName: MetisAgentName,
   rawText: string,
-  options?: { finalSynthesis?: boolean },
+  options?: { finalSynthesis?: boolean; memoryIntervention?: MetisMemoryIntervention | null },
 ): MetisAgentOutput {
   let parsed: StructuredCouncilPayload;
 
@@ -348,6 +291,7 @@ function normaliseOutput(
     confidence: Math.max(0, Math.min(1, Number.isFinite(confidence) ? confidence : 0.5)),
     recommendedAction,
     summaryRationale: cleanInlineText(compactParsed.summaryRationale ?? "No rationale returned."),
+    memoryIntervention: options?.memoryIntervention ?? null,
   };
 }
 
@@ -369,6 +313,14 @@ function formatTranscript(discussion: CouncilContextEntry[]) {
     .join("\n\n");
 }
 
+function findLearningById(
+  learnings: MetisCouncilLearning[] | undefined,
+  id: number | null | undefined
+): MetisCouncilLearning | null {
+  if (!learnings || !id) return null;
+  return learnings.find((entry) => entry.id === id) ?? null;
+}
+
 function buildStructuredPrompt(input: {
   agentName: MetisAgentName;
   brief: string;
@@ -377,6 +329,10 @@ function buildStructuredPrompt(input: {
   companyContext?: string;
   relatedInsights?: MetisSessionInsight[];
   relatedLearnings?: MetisCouncilLearning[];
+  memoryIntervention?: {
+    learning: MetisCouncilLearning;
+    reason: string;
+  } | null;
   finalSynthesis?: boolean;
 }) {
   const priorAgentMessages = input.discussion.filter((entry) => entry.role !== "user").length;
@@ -404,17 +360,13 @@ function buildStructuredPrompt(input: {
     ? "You are producing the final close. Keep it compact, decisive, and under 110 words total across all visible sections. Preserve the most important disagreement instead of burying it."
     : "You are speaking live in the meeting. Keep the entire visible response under 90 words total and land the point fast.";
   const convergenceInstruction = input.finalSynthesis
-    ? "You may converge now only because the required challenge round has occurred. Carry Loki's strongest surviving objection into the final challenge line."
+    ? "You may converge now. Carry Loki's strongest surviving objection into the final challenge line."
     : input.agentName === "Metis"
-      ? "Do not close the decision in this turn. Treat your position as provisional and explicitly keep the room open until the challenge round is complete."
+      ? "Do not close the decision in this turn. Treat your position as provisional."
       : input.agentName === "Loki"
         ? "Your challenge is mandatory. Name the sharpest weakness plainly so the room must deal with it before convergence."
         : "Keep your stance clear, concise, and responsive to the current tension rather than restating the whole case.";
 
-  // Prefer the new structured learnings block when we have it. Fall back
-  // to the legacy sessionInsights block only when no learnings have been
-  // extracted yet (early in the rollout, or for sessions that pre-date
-  // Phase 1). Both layers coexist during the transition.
   const memoryBlock = hasLearnings
     ? buildLearningsBlock(input.relatedLearnings)
     : hasLegacyInsights
@@ -427,9 +379,26 @@ function buildStructuredPrompt(input: {
         ].join("\n")
       : "Prior council memory: None retrieved for this brief. Do not invent prior outcomes.";
 
-  return [
+  const memoryInterventionBlock = input.memoryIntervention
+    ? [
+        "MEMORY INTERVENTION FROM THE CHAIR:",
+        `The chair has invoked a prior learning that you must address directly in this turn.`,
+        `Prior learning: ${input.memoryIntervention.learning.kind} [${input.memoryIntervention.learning.confidence}] — "${input.memoryIntervention.learning.statement}"`,
+        `Why the chair surfaced it now: ${input.memoryIntervention.reason}`,
+        `Open your response by naming this prior learning explicitly. Either apply it, respectfully contest it with new evidence, or explain why the current situation genuinely differs. Do not ignore it.`,
+      ].join("\n")
+    : "";
+
+  const parts = [
     input.companyContext ?? "Company context: No company profile has been configured yet.",
     memoryBlock,
+  ];
+
+  if (memoryInterventionBlock) {
+    parts.push(memoryInterventionBlock);
+  }
+
+  parts.push(
     `Council brief:\n${input.brief}`,
     `Stage direction:\n${input.stageDirection}`,
     `Current discussion transcript:\n${formatTranscript(input.discussion)}`,
@@ -447,7 +416,9 @@ function buildStructuredPrompt(input: {
     "- challenge: exactly 1 short bullet-worthy sentence naming the strongest disagreement or risk.",
     "- summaryRationale: exactly 1 short sentence under 20 words.",
     "Do not mention JSON, schemas, or formatting rules in the visible content.",
-  ].join("\n\n");
+  );
+
+  return parts.join("\n\n");
 }
 
 async function fetchWithRetry(input: RequestInfo | URL, init: RequestInit, attempts = 3) {
@@ -595,7 +566,7 @@ async function invokeAgent(
   agentName: MetisAgentName,
   system: string,
   prompt: string,
-  options?: { finalSynthesis?: boolean },
+  options?: { finalSynthesis?: boolean; memoryIntervention?: MetisMemoryIntervention | null },
 ) {
   if (agentName === "Metis") {
     return normaliseOutput(agentName, await callAnthropic(system, prompt), options);
@@ -655,6 +626,43 @@ export function flattenTurnsToContextEntries(turns: MetisCouncilTurn[]): Council
   });
 }
 
+// ---------- The dynamic council loop ----------
+
+async function runSpecialistTurn(input: {
+  agentName: Exclude<MetisAgentName, "Metis">;
+  directive: string;
+  brief: string;
+  contextSequence: CouncilContextEntry[];
+  companyContext: string;
+  relatedInsights?: MetisSessionInsight[];
+  relatedLearnings?: MetisCouncilLearning[];
+  memoryIntervention?: { learning: MetisCouncilLearning; reason: string } | null;
+  discussion: MetisCouncilMessage[];
+}): Promise<MetisCouncilMessage> {
+  const output = await invokeAgent(
+    input.agentName,
+    specialistPrompts[input.agentName],
+    buildStructuredPrompt({
+      agentName: input.agentName,
+      brief: input.brief,
+      stageDirection: input.directive,
+      discussion: input.contextSequence,
+      companyContext: input.companyContext,
+      relatedInsights: input.relatedInsights,
+      relatedLearnings: input.relatedLearnings,
+      memoryIntervention: input.memoryIntervention,
+      finalSynthesis: false,
+    }),
+    {
+      finalSynthesis: false,
+      memoryIntervention: input.memoryIntervention
+        ? { learningId: input.memoryIntervention.learning.id, reason: input.memoryIntervention.reason }
+        : null,
+    },
+  );
+  return asDiscussionMessage(output, input.discussion.length + 1);
+}
+
 export async function streamCouncilTurn(input: {
   sessionId: string;
   userMessage: string;
@@ -664,11 +672,15 @@ export async function streamCouncilTurn(input: {
   relatedLearnings?: MetisCouncilLearning[];
   onEvent?: (event: StreamedCouncilEvent) => Promise<void> | void;
   shouldStop?: () => Promise<boolean> | boolean;
+  timeoutSeconds?: number;
 }): Promise<StreamCouncilTurnResult> {
   const createdAt = Date.now();
+  const timeoutSeconds = input.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
   const discussion: MetisCouncilMessage[] = [];
   let synthesis: MetisCouncilMessage | null = null;
-  let contextSequence = input.historyEntries ?? flattenTurnsToContextEntries(input.history ?? []);
+  let deadlockReason: string | null = null;
+
+  let contextSequence: CouncilContextEntry[] = input.historyEntries ?? flattenTurnsToContextEntries(input.history ?? []);
   const companyContext = buildCompanyContextBlock(await getCompanyProfile());
 
   contextSequence = [
@@ -681,49 +693,219 @@ export async function streamCouncilTurn(input: {
     },
   ];
 
-  for (const step of councilPlan) {
+  const pushAgentMessage = async (message: MetisCouncilMessage, kind: "discussion" | "synthesis") => {
+    if (kind === "discussion") {
+      discussion.push(message);
+    } else {
+      synthesis = message;
+    }
+    contextSequence.push(toContextEntry(message, kind === "discussion" ? "agent" : "synthesis", contextSequence.length + 1));
+    await input.onEvent?.({ kind, message });
+  };
+
+  // ----- Step 1: chair opening -----
+  if ((await input.shouldStop?.()) === true) {
+    return { sessionId: input.sessionId, userMessage: input.userMessage, discussion, synthesis, createdAt, completed: false };
+  }
+
+  const openingDirective =
+    "Open the meeting. Define the crux of the brief, name the central tension, and contribute your first framing. Do not close the discussion.";
+
+  const opening = await invokeAgent(
+    "Metis",
+    chairOpeningPrompt,
+    buildStructuredPrompt({
+      agentName: "Metis",
+      brief: input.userMessage,
+      stageDirection: openingDirective,
+      discussion: contextSequence,
+      companyContext,
+      relatedInsights: input.relatedInsights,
+      relatedLearnings: input.relatedLearnings,
+      finalSynthesis: false,
+    }),
+    { finalSynthesis: false },
+  );
+  await pushAgentMessage(asDiscussionMessage(opening, discussion.length + 1), "discussion");
+
+  // ----- Step 2: initial opening round of specialists -----
+  for (const agentName of specialistsForRound()) {
     if ((await input.shouldStop?.()) === true) {
-      return {
-        sessionId: input.sessionId,
-        userMessage: input.userMessage,
-        discussion,
-        synthesis,
-        createdAt,
-        completed: false,
-      };
+      return { sessionId: input.sessionId, userMessage: input.userMessage, discussion, synthesis, createdAt, completed: false };
     }
 
-    if (step.kind === "synthesis" && !hasRequiredChallengeRound(discussion)) {
-      throw new Error("Metis cannot converge before the full challenge round has completed.");
+    const message = await runSpecialistTurn({
+      agentName,
+      directive:
+        agentName === "Athena"
+          ? "Deliver the opening strategic position. Propose a practical path forward and acknowledge the tension Metis named."
+          : agentName === "Argus"
+            ? "Validate or challenge the assumptions in Athena's position, identify missing evidence, and sharpen the decision criteria."
+            : "Attack the weakest assumption on the table, expose the most serious execution risk, and make the debate more adversarial and concrete.",
+      brief: input.userMessage,
+      contextSequence,
+      companyContext,
+      relatedInsights: input.relatedInsights,
+      relatedLearnings: input.relatedLearnings,
+      discussion,
+    });
+    await pushAgentMessage(message, "discussion");
+  }
+
+  // ----- Step 3: dynamic chair loop -----
+  for (let move = 0; move < MAX_CHAIR_MOVES; move += 1) {
+    if ((await input.shouldStop?.()) === true) {
+      return { sessionId: input.sessionId, userMessage: input.userMessage, discussion, synthesis, createdAt, completed: false, deadlockReason };
     }
+
+    const elapsedSeconds = Math.floor((Date.now() - createdAt) / 1000);
+    const { openingRoundComplete, challengeRoundComplete } = getCouncilRoundState(discussion);
+    const closure = shouldForceClosure(discussion, specialistsForRound().length);
+    // Time-based forced closure takes precedence when we're deep into the budget.
+    const timeExhausted = elapsedSeconds > timeoutSeconds * 0.85;
+    const forceClosureReason = closure.force
+      ? closure.reason
+      : timeExhausted
+        ? `time budget ${elapsedSeconds}s of ${timeoutSeconds}s nearly exhausted`
+        : null;
+
+    let directive;
+    try {
+      directive = await decideNextMove({
+        brief: input.userMessage,
+        discussion,
+        availableLearnings: input.relatedLearnings ?? [],
+        openingRoundComplete,
+        challengeRoundComplete,
+        elapsedSeconds,
+        timeoutSeconds,
+        forceClosureReason,
+      });
+    } catch (error) {
+      // If the director call itself fails, fail safely: if we can synthesise,
+      // do it; otherwise surface the error up.
+      if (challengeRoundComplete) {
+        directive = {
+          action: "synthesise" as const,
+          target: null,
+          directive: "Director call failed; synthesising from current state.",
+          rationale: error instanceof Error ? error.message : "director error",
+          memoryIntervention: null,
+        };
+      } else {
+        throw error;
+      }
+    }
+
+    await input.onEvent?.({
+      kind: "chair_directive",
+      directive: {
+        action: directive.action,
+        target: directive.target,
+        directive: directive.directive,
+        rationale: directive.rationale,
+      },
+    });
+
+    if (directive.action === "deadlock") {
+      deadlockReason = directive.rationale;
+      break;
+    }
+
+    if (directive.action === "synthesise") {
+      // Enforce the challenge round gate.
+      if (!challengeRoundComplete) {
+        // Director should not have returned this, but the rule guard already
+        // rewrites to call_round — defensive fallback in case we got here.
+        directive = { ...directive, action: "call_round", target: null };
+      } else {
+        break;
+      }
+    }
+
+    // Resolve memory intervention against the learnings we actually have.
+    const interventionLearning = findLearningById(
+      input.relatedLearnings,
+      directive.memoryIntervention?.learningId,
+    );
+    const memoryIntervention =
+      interventionLearning && directive.memoryIntervention
+        ? { learning: interventionLearning, reason: directive.memoryIntervention.reason }
+        : null;
+
+    if (directive.action === "call_specialist" && directive.target) {
+      if ((await input.shouldStop?.()) === true) {
+        return { sessionId: input.sessionId, userMessage: input.userMessage, discussion, synthesis, createdAt, completed: false, deadlockReason };
+      }
+      const message = await runSpecialistTurn({
+        agentName: directive.target,
+        directive: directive.directive,
+        brief: input.userMessage,
+        contextSequence,
+        companyContext,
+        relatedInsights: input.relatedInsights,
+        relatedLearnings: input.relatedLearnings,
+        memoryIntervention,
+        discussion,
+      });
+      await pushAgentMessage(message, "discussion");
+      continue;
+    }
+
+    if (directive.action === "call_round") {
+      for (const agentName of specialistsForRound()) {
+        if ((await input.shouldStop?.()) === true) {
+          return { sessionId: input.sessionId, userMessage: input.userMessage, discussion, synthesis, createdAt, completed: false, deadlockReason };
+        }
+        const message = await runSpecialistTurn({
+          agentName,
+          directive: directive.directive,
+          brief: input.userMessage,
+          contextSequence,
+          companyContext,
+          relatedInsights: input.relatedInsights,
+          relatedLearnings: input.relatedLearnings,
+          // The intervention, if any, is addressed only by the first speaker
+          // of the round. Otherwise all three pile on the same learning,
+          // which is repetitive.
+          memoryIntervention: agentName === "Athena" ? memoryIntervention : null,
+          discussion,
+        });
+        await pushAgentMessage(message, "discussion");
+      }
+      continue;
+    }
+  }
+
+  // ----- Step 4: synthesis -----
+  // We arrive here either because the chair directed synthesise, declared
+  // deadlock, or because MAX_CHAIR_MOVES was reached. In all cases we must
+  // produce a final synthesis message to close the session cleanly.
+  if (!synthesis) {
+    if ((await input.shouldStop?.()) === true) {
+      return { sessionId: input.sessionId, userMessage: input.userMessage, discussion, synthesis, createdAt, completed: false, deadlockReason };
+    }
+
+    const synthesisDirective = deadlockReason
+      ? `The council did not converge. The chair declared deadlock with this reason: ${deadlockReason}. Produce a synthesis that states the council's inability to land the decision, summarises the strongest competing positions, and recommends one concrete next step for Orion (usually: gather a specific piece of missing evidence before bringing the brief back).`
+      : "Close the meeting. Integrate the strongest arguments, preserve the disagreement that still matters, state what the council is betting on, and end with one decisive recommended next action for Orion.";
 
     const output = await invokeAgent(
-      step.agentName,
-      step.systemPrompt,
+      "Metis",
+      synthesisPrompt,
       buildStructuredPrompt({
-        agentName: step.agentName,
+        agentName: "Metis",
         brief: input.userMessage,
-        stageDirection: step.stageDirection,
+        stageDirection: synthesisDirective,
         discussion: contextSequence,
         companyContext,
         relatedInsights: input.relatedInsights,
         relatedLearnings: input.relatedLearnings,
-        finalSynthesis: step.kind === "synthesis",
+        finalSynthesis: true,
       }),
-      { finalSynthesis: step.kind === "synthesis" },
+      { finalSynthesis: true },
     );
-
-    const message = asDiscussionMessage(output, discussion.length + (step.kind === "synthesis" ? 1 : 1));
-
-    if (step.kind === "discussion") {
-      discussion.push(message);
-      contextSequence.push(toContextEntry(message, "agent", contextSequence.length + 1));
-    } else {
-      synthesis = message;
-      contextSequence.push(toContextEntry(message, "synthesis", contextSequence.length + 1));
-    }
-
-    await input.onEvent?.({ kind: step.kind, message });
+    await pushAgentMessage(asDiscussionMessage(output, discussion.length + 1), "synthesis");
   }
 
   return {
@@ -733,6 +915,7 @@ export async function streamCouncilTurn(input: {
     synthesis,
     createdAt,
     completed: true,
+    deadlockReason,
   };
 }
 

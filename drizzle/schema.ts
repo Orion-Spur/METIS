@@ -94,51 +94,6 @@ export const councilSessions = pgTable(
   ]
 );
 
-export const councilMessages = pgTable(
-  "councilMessages",
-  {
-    id: varchar("id", { length: 64 }).primaryKey(),
-    sessionId: varchar("sessionId", { length: 64 })
-      .notNull()
-      .references(() => councilSessions.id, { onDelete: "cascade" }),
-    sequenceOrder: integer("sequenceOrder").notNull(),
-    role: councilMessageRoleEnum("role").notNull(),
-    agentName: agentNameEnum("agentName"),
-    content: text("content").notNull(),
-    confidence: numeric("confidence", { precision: 4, scale: 2 }),
-    recommendedAction: recommendedActionEnum("recommendedAction"),
-    summaryRationale: text("summaryRationale"),
-    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
-  },
-  (table) => [
-    index("council_messages_session_id_idx").on(table.sessionId),
-    index("council_messages_session_sequence_idx").on(table.sessionId, table.sequenceOrder),
-  ]
-);
-
-export const sessionInsights = pgTable(
-  "sessionInsights",
-  {
-    id: serial("id").primaryKey(),
-    sessionId: varchar("sessionId", { length: 64 })
-      .notNull()
-      .references(() => councilSessions.id, { onDelete: "cascade" }),
-    userId: integer("userId")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    title: varchar("title", { length: 255 }).notNull(),
-    insight: text("insight").notNull(),
-    rationale: text("rationale"),
-    tags: text("tags"),
-    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
-  },
-  (table) => [
-    index("session_insights_user_created_idx").on(table.userId, table.createdAt),
-    index("session_insights_session_id_idx").on(table.sessionId),
-  ]
-);
-
 export const councilLearnings = pgTable(
   "councilLearnings",
   {
@@ -168,6 +123,56 @@ export const councilLearnings = pgTable(
     index("council_learnings_user_kind_idx").on(table.userId, table.kind),
     index("council_learnings_user_updated_idx").on(table.userId, table.updatedAt),
     index("council_learnings_session_id_idx").on(table.sessionId),
+  ]
+);
+
+export const councilMessages = pgTable(
+  "councilMessages",
+  {
+    id: varchar("id", { length: 64 }).primaryKey(),
+    sessionId: varchar("sessionId", { length: 64 })
+      .notNull()
+      .references(() => councilSessions.id, { onDelete: "cascade" }),
+    sequenceOrder: integer("sequenceOrder").notNull(),
+    role: councilMessageRoleEnum("role").notNull(),
+    agentName: agentNameEnum("agentName"),
+    content: text("content").notNull(),
+    confidence: numeric("confidence", { precision: 4, scale: 2 }),
+    recommendedAction: recommendedActionEnum("recommendedAction"),
+    summaryRationale: text("summaryRationale"),
+    memoryInterventionLearningId: integer("memoryInterventionLearningId").references(
+      () => councilLearnings.id,
+      { onDelete: "set null" }
+    ),
+    memoryInterventionReason: text("memoryInterventionReason"),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("council_messages_session_id_idx").on(table.sessionId),
+    index("council_messages_session_sequence_idx").on(table.sessionId, table.sequenceOrder),
+  ]
+);
+
+export const sessionInsights = pgTable(
+  "sessionInsights",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: varchar("sessionId", { length: 64 })
+      .notNull()
+      .references(() => councilSessions.id, { onDelete: "cascade" }),
+    userId: integer("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 255 }).notNull(),
+    insight: text("insight").notNull(),
+    rationale: text("rationale"),
+    tags: text("tags"),
+    createdAt: timestamp("createdAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("session_insights_user_created_idx").on(table.userId, table.createdAt),
+    index("session_insights_session_id_idx").on(table.sessionId),
   ]
 );
 

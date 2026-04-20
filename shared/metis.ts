@@ -9,12 +9,18 @@ export type MetisRecommendedAction =
   | "escalate"
   | "request_clarification";
 
+export type MetisMemoryIntervention = {
+  learningId: number;
+  reason: string;
+};
+
 export type MetisAgentOutput = {
   agentName: MetisAgentName;
   confidence: number;
   recommendedAction: MetisRecommendedAction;
   summaryRationale: string;
   content: string;
+  memoryIntervention?: MetisMemoryIntervention | null;
 };
 
 export type MetisCouncilMessage = MetisAgentOutput & {

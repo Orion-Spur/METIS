@@ -194,6 +194,12 @@ function mapAgentMessage(row: typeof councilMessages.$inferSelect): MetisCouncil
     confidence: toNumber(row.confidence) ?? 0,
     recommendedAction: row.recommendedAction ?? "request_clarification",
     summaryRationale: row.summaryRationale ?? "",
+    memoryIntervention: row.memoryInterventionLearningId
+      ? {
+          learningId: row.memoryInterventionLearningId,
+          reason: row.memoryInterventionReason ?? "",
+        }
+      : null,
   };
 }
 
@@ -667,6 +673,8 @@ export async function appendCouncilMessage(input: {
     confidence: input.message.confidence.toFixed(2),
     recommendedAction: input.message.recommendedAction,
     summaryRationale: input.message.summaryRationale,
+    memoryInterventionLearningId: input.message.memoryIntervention?.learningId ?? null,
+    memoryInterventionReason: input.message.memoryIntervention?.reason ?? null,
     createdAt: new Date(),
   });
 
@@ -1044,4 +1052,54 @@ export async function listLearningsForSession(input: {
     )
     .orderBy(councilLearnings.id);
   return rows.map(mapCouncilLearning);
+}
+
+// Audit helper: list recent memory interventions across sessions. Useful
+// for Orion to see how often the chair is reaching into memory and which
+// learnings are being invoked most.
+export async function listRecentMemoryInterventions(input: {
+  userId: number;
+  limit?: number;
+}): Promise<
+  Array<{
+    sessionId: string;
+    agentName: string;
+    learningId: number;
+    learningStatement: string;
+    reason: string;
+    createdAt: number;
+  }>
+> {
+  const db = getDb();
+  const limit = input.limit ?? 20;
+
+  const rows = await db
+    .select({
+      sessionId: councilMessages.sessionId,
+      agentName: councilMessages.agentName,
+      learningId: councilMessages.memoryInterventionLearningId,
+      learningStatement: councilLearnings.statement,
+      reason: councilMessages.memoryInterventionReason,
+      createdAt: councilMessages.createdAt,
+    })
+    .from(councilMessages)
+    .innerJoin(
+      councilLearnings,
+      eq(councilMessages.memoryInterventionLearningId, councilLearnings.id),
+    )
+    .innerJoin(councilSessions, eq(councilMessages.sessionId, councilSessions.id))
+    .where(eq(councilSessions.userId, input.userId))
+    .orderBy(desc(councilMessages.createdAt))
+    .limit(limit);
+
+  return rows
+    .filter((row): row is typeof row & { learningId: number } => row.learningId !== null)
+    .map((row) => ({
+      sessionId: row.sessionId,
+      agentName: row.agentName ?? "unknown",
+      learningId: row.learningId,
+      learningStatement: row.learningStatement,
+      reason: row.reason ?? "",
+      createdAt: toTimestamp(row.createdAt),
+    }));
 }

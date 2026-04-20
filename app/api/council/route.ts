@@ -12,6 +12,12 @@ import {
 import { extractLearnings } from "@/lib/learningExtractor";
 import { flattenTurnsToContextEntries, streamCouncilTurn } from "@/lib/metisCouncil";
 
+// Vercel function duration budget. Dynamic chair sessions can run longer
+// than the previous fixed 9-step plan, so we request the maximum the
+// platform will give us. On Pro this is 300 seconds; on Hobby it's 60
+// and the dynamic chair will be aggressive about synthesising early.
+export const maxDuration = 300;
+
 const encoder = new TextEncoder();
 const recallIntentPattern = /\b(agree|agreed|agreement|agreements|decide|decided|decision|decisions|summary|summarise|summarize|recap|recall|previous|previously|earlier|prior|previous session|prior session|earlier session|where we left off|what happened|what has been agreed|what did we agree|today(?:'s)? discussion|today(?:'s)? discussions|this discussion|this session)\b/i;
 
@@ -145,9 +151,27 @@ export async function POST(request: Request) {
               historyEntries: authoritativeHistoryEntries ?? body.liveContext,
               relatedInsights,
               relatedLearnings,
+              timeoutSeconds: 270,
               shouldStop: () => request.signal.aborted || closed,
               onEvent: async (event) => {
                 if (request.signal.aborted || closed) {
+                  return;
+                }
+
+                // Chair directives are informational — they tell the UI what
+                // move Metis just decided without being persisted as a
+                // message. The client can use these to render "Metis is
+                // calling Loki for a sharper challenge" etc.
+                if (event.kind === "chair_directive" && event.directive) {
+                  enqueue({
+                    type: "chair_directive",
+                    sessionId: started.sessionId,
+                    directive: event.directive,
+                  });
+                  return;
+                }
+
+                if (!event.message) {
                   return;
                 }
 
