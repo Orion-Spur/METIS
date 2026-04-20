@@ -262,8 +262,10 @@ function stripJsonFences(text: string): string {
 
 // ---------- Convenience for determining specialist sequence in a round ----------
 
-const ROUND_SEQUENCE: MetisAgentName[] = ["Athena", "Argus", "Loki"];
+type SpecialistName = Exclude<MetisAgentName, "Metis">;
 
-export function specialistsForRound(): MetisAgentName[] {
+const ROUND_SEQUENCE: SpecialistName[] = ["Athena", "Argus", "Loki"];
+
+export function specialistsForRound(): SpecialistName[] {
   return [...ROUND_SEQUENCE];
 }
